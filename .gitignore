@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---- Node.js / app web ----
+node_modules/
+dist/
+tests/capturas/
+*.log
+.DS_Store
+*.tsbuildinfo

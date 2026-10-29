@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* Cores e fonte do Layout C ("Para onde vai o dinheiro").
+   Todas as combinações de texto/fundo passam no teste de contraste (WCAG AA). */
+@theme {
+  --font-sans: "Manrope Variable", system-ui, sans-serif;
+  --color-fundo: #FAF7F2;
+  --color-cartao: #FFFFFF;
+  --color-borda: #EFE9DE;
+  --color-borda-forte: #E7E1D6;
+  --color-tinta: #1E1B2E;
+  --color-suave: #5E5A6E;
+  --color-primaria: #4B3FC4;
+  --color-primaria-escura: #3A2FA3;
+  --color-primaria-clara: #F4F2FC;
+  --color-menu: #1E1B2E;
+  --color-menu-texto: #C9C5D9;
+  --color-perigo: #B42318;
+  --color-perigo-texto: #8F1D1D;
+  --color-perigo-fundo: #FDECEC;
+  --color-alerta-texto: #6B4700;
+  --color-alerta-fundo: #FFF6E0;
+  --color-ok-texto: #0B6B2E;
+  --color-status-ok: #0CA30C;
+  --color-status-alerta: #FAB219;
+  --color-status-perigo: #D03B3B;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--color-fundo); color: var(--color-tinta); font-family: var(--font-sans); }
+
+/* Foco sempre visível para quem navega pelo teclado */
+:focus-visible { outline: 3px solid var(--color-primaria); outline-offset: 2px; border-radius: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

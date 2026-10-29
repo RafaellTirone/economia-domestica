@@ -1,0 +1,22 @@
+# Publicação no Netlify (gratuito). O app é só arquivos estáticos: não existe servidor.
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Rotas do app (ex.: /dividas) sempre abrem o index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Travas de segurança do navegador:
+# - connect-src 'none': o app NÃO consegue enviar dados para nenhum servidor
+# - nada de scripts, fontes ou imagens de outros sites
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'none'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains"

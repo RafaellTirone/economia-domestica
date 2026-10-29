@@ -8,7 +8,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 
 const PRINCIPAIS = [
   { para: '/', texto: 'Visão geral', curto: 'Visão', Icone: PieChart },
-  { para: '/gastos', texto: 'Gastos', curto: 'Gastos', Icone: ShoppingBag },
+  { para: '/lancamentos', texto: 'Lançamentos', curto: 'Lançamentos', Icone: ShoppingBag },
   { para: '/dividas', texto: 'Dívidas', curto: 'Dívidas', Icone: Landmark },
   { para: '/cofrinhos', texto: 'Cofrinhos', curto: 'Cofrinhos', Icone: PiggyBank },
   { para: '/desejos', texto: 'Desejos', curto: 'Desejos', Icone: Heart },
@@ -29,6 +29,8 @@ function Logo() {
 export function Estrutura({ children }: { children: ReactNode }) {
   const [maisAberto, setMaisAberto] = useState(false);
   const local = useLocation();
+  // Na tela de lançar, o menu do celular some para dar lugar aos botões de salvar.
+  const telaDeLancar = local.pathname.startsWith('/lancar');
   useEffect(() => setMaisAberto(false), [local.pathname]);
   useEffect(() => {
     if (!maisAberto) return;
@@ -65,11 +67,11 @@ export function Estrutura({ children }: { children: ReactNode }) {
       {/* Topo — celular */}
       <header className="flex items-center px-4 pt-3 md:hidden"><Logo /></header>
 
-      <main id="conteudo" className="mx-auto max-w-[1240px] px-4 pb-[calc(104px+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pb-12 md:pt-6">{children}</main>
+      <main id="conteudo" className={`mx-auto max-w-[1240px] px-4 pt-4 md:px-6 md:pb-12 md:pt-6 ${telaDeLancar ? 'pb-6' : 'pb-[calc(104px+env(safe-area-inset-bottom))]'}`}>{children}</main>
 
       {/* Menu inferior — celular: encostado na borda de baixo, na largura toda.
           A folga do iPhone (barra de gestos) é respeitada com safe-area-inset-bottom. */}
-      <nav aria-label="Menu principal" className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around rounded-t-[22px] bg-menu pt-2 pb-[max(8px,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(30,27,46,0.18)] md:hidden">
+      <nav aria-label="Menu principal" hidden={telaDeLancar} className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around rounded-t-[22px] bg-menu pt-2 pb-[max(8px,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(30,27,46,0.18)] md:hidden">
         <ItemMenuCelular {...PRINCIPAIS[0]} />
         <ItemMenuCelular {...PRINCIPAIS[2]} />
         <Link to="/lancar" aria-label="Novo lançamento" className="flex h-[52px] w-[52px] items-center justify-center rounded-2xl bg-primaria text-white">

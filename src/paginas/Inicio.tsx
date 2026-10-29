@@ -4,6 +4,7 @@ import { AnelProgresso } from '../componentes/ui/AnelProgresso';
 import { IconeCategoria } from '../componentes/ui/IconeCategoria';
 import { SeletorMes } from '../componentes/ui/SeletorMes';
 import { useCategorias, useLancamentosDoMes } from '../hooks/useDados';
+import { ItemLancamento } from './Lancamentos';
 import { useMes } from '../hooks/useMes';
 import { calcularResumo, type ResumoCategoria } from '../servicos/resumo';
 import { formatarMesAno } from '../utils/datas';
@@ -48,12 +49,25 @@ export function Inicio() {
       <section aria-labelledby="titulo-envelopes">
         <div className="mb-2.5 flex items-baseline">
           <h2 id="titulo-envelopes" className="m-0 text-lg font-extrabold">Envelopes do mês</h2>
-          <Link to="/gastos" className="ml-auto inline-flex min-h-11 items-center text-sm font-bold text-primaria no-underline">Definir limites</Link>
+          <span className="ml-auto text-xs text-suave">toque para ver os lançamentos</span>
         </div>
         <ul className="m-0 grid list-none grid-cols-2 gap-2.5 p-0 sm:grid-cols-3 lg:grid-cols-4">
           {resumo.porCategoria.map((rc) => <Envelope key={rc.categoria.id} {...rc} />)}
         </ul>
       </section>
+
+      {!vazio && (
+        <section aria-labelledby="titulo-ultimos">
+          <div className="mb-2.5 flex items-baseline">
+            <h2 id="titulo-ultimos" className="m-0 text-lg font-extrabold">Últimos lançamentos</h2>
+            <Link to="/lancamentos" className="ml-auto inline-flex min-h-11 items-center text-sm font-bold text-primaria no-underline">Ver todos</Link>
+          </div>
+          <ul className="m-0 flex list-none flex-col overflow-hidden rounded-2xl border border-borda bg-cartao p-0">
+            {[...lancamentos!].sort((a, b) => b.data.localeCompare(a.data) || (b.id ?? 0) - (a.id ?? 0)).slice(0, 5)
+              .map((l) => <ItemLancamento key={l.id} l={l} categoria={categorias!.find((c) => c.id === l.categoriaId)} />)}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }
@@ -73,7 +87,9 @@ function Envelope({ categoria, gasto, percentualDoLimite, situacao }: ResumoCate
   const detalhe = situacao === 'sem-limite' ? 'sem limite definido'
     : `${formatarPercentual(percentualDoLimite!, 0)} do limite${situacao === 'estourou' ? ' · estourou' : situacao === 'atencao' ? ' · atenção' : ''}`;
   return (
-    <li className={`flex items-center gap-3 rounded-2xl bg-cartao p-3 ${situacao === 'estourou' ? 'border-2 border-status-perigo' : 'border border-borda'}`}>
+    <li>
+      <Link to={`/lancamentos?categoria=${categoria.id}`} aria-label={`${categoria.nome}: ${formatarMoeda(gasto)}, ${detalhe}. Ver lançamentos`}
+        className={`flex h-full items-center gap-3 rounded-2xl bg-cartao p-3 text-tinta no-underline hover:bg-primaria-clara ${situacao === 'estourou' ? 'border-2 border-status-perigo' : 'border border-borda'}`}>
       <AnelProgresso percentual={percentualDoLimite} situacao={situacao} tamanho={46} rotulo={detalhe}>
         <IconeCategoria nome={categoria.icone} tamanho={18} />
       </AnelProgresso>
@@ -82,6 +98,7 @@ function Envelope({ categoria, gasto, percentualDoLimite, situacao }: ResumoCate
         <p className="m-0 text-[15px] font-extrabold">{formatarMoeda(gasto)}</p>
         <p className={`m-0 text-xs font-bold ${TEXTO_SITUACAO[situacao]}`}>{detalhe}</p>
       </div>
+      </Link>
     </li>
   );
 }

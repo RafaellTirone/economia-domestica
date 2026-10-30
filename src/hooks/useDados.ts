@@ -24,3 +24,23 @@ export function useTodosLancamentos() {
 export function useLancamento(id: number | null) {
   return useLiveQuery(async () => (id ? (await banco.lancamentos.get(id)) ?? null : null), [id]);
 }
+
+/** Empréstimos com os pagamentos de cada um. */
+export function useEmprestimos() {
+  return useLiveQuery(async () => {
+    const [emprestimos, pagamentos] = await Promise.all([banco.emprestimos.toArray(), banco.pagamentosParcela.toArray()]);
+    return emprestimos.map((e) => ({ emprestimo: e, pagamentos: pagamentos.filter((p) => p.emprestimoId === e.id) }));
+  }, []);
+}
+
+/** Um empréstimo, seus pagamentos e o PDF do contrato (null = não existe). */
+export function useEmprestimo(id: number | null) {
+  return useLiveQuery(async () => {
+    if (!id) return null;
+    const emprestimo = await banco.emprestimos.get(id);
+    if (!emprestimo) return null;
+    const pagamentos = await banco.pagamentosParcela.where('emprestimoId').equals(id).toArray();
+    const arquivo = emprestimo.contratoArquivoId ? (await banco.arquivos.get(emprestimo.contratoArquivoId)) ?? null : null;
+    return { emprestimo, pagamentos, arquivo };
+  }, [id]);
+}

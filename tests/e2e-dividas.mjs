@@ -1,0 +1,210 @@
+// Auditoria das Dívidas: cadastra empréstimos como uma pessoa faria, anexando um contrato em PDF
+// de verdade (gerado aqui), confere o que o app leu, registra pagamentos e confere os cálculos de
+// juros e de atraso. Uso: npm run build && npm run test:e2e
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { CAPTURAS, confere, encerrar, hoje, iniciarServidor, iso, nb, playwright, verificarTela } from './apoio.mjs';
+
+const URL_APP = await iniciarServidor(4176);
+const PASTA = join(CAPTURAS, '..', 'arquivos-teste');
+mkdirSync(PASTA, { recursive: true });
+
+// ---------- PDFs de teste ----------
+/** Monta um PDF simples (texto em Helvetica, acentos em Latin-1) com as linhas dadas. */
+function gerarPdf(linhas) {
+  const esc = (t) => t.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+  const conteudo = linhas.length
+    ? `BT /F1 10 Tf 50 800 Td 14 TL ${linhas.map((l) => `(${esc(l)}) Tj T*`).join(' ')} ET`
+    : '0.8 g 50 300 500 450 re f'; // "foto": só um retângulo cinza, sem texto
+  const objetos = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    `<< /Length ${Buffer.byteLength(conteudo, 'latin1')} >>\nstream\n${conteudo}\nendstream`,
+  ];
+  let pdf = '%PDF-1.4\n';
+  const posicoes = [];
+  objetos.forEach((o, i) => { posicoes.push(Buffer.byteLength(pdf, 'latin1')); pdf += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = Buffer.byteLength(pdf, 'latin1');
+  pdf += `xref\n0 ${objetos.length + 1}\n0000000000 65535 f \n${posicoes.map((p) => `${String(p).padStart(10, '0')} 00000 n \n`).join('')}`;
+  pdf += `trailer\n<< /Size ${objetos.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, 'latin1');
+}
+const CONTRATO = join(PASTA, 'contrato-consignado.pdf');
+writeFileSync(CONTRATO, gerarPdf([
+  'CÉDULA DE CRÉDITO BANCÁRIO - EMPRÉSTIMO CONSIGNADO',
+  'CCB nº 123456789-0     Data de emissão: 10/03/2025',
+  'CREDOR: Banco Horizonte S.A., CNPJ 00.000.000/0001-00',
+  'QUADRO III - CARACTERÍSTICAS DA OPERAÇÃO',
+  'Valor do empréstimo: R$ 10.000,00',
+  'Quantidade de parcelas: 36',
+  'Valor da parcela: R$ 385,43',
+  'Vencimento da 1ª parcela: 10/04/2025',
+  'Taxa de juros: 1,89% a.m.   Taxa de juros: 25,19% a.a.',
+  'Custo Efetivo Total (CET): 2,05% a.m. e 27,58% a.a.',
+  'Sistema de amortização: Tabela Price.',
+  'CLÁUSULA 8 - DO INADIMPLEMENTO. No caso de atraso no pagamento de qualquer parcela,',
+  'incidirão multa moratória de 2% (dois por cento) sobre o valor em atraso e juros de',
+  'mora de 1% (um por cento) ao mês, calculados pro rata die.',
+]));
+const ESCANEADO = join(PASTA, 'contrato-escaneado.pdf');
+writeFileSync(ESCANEADO, gerarPdf([]));
+
+const navegador = await playwright.chromium.launch();
+const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 }, locale: 'pt-BR', hasTouch: true, isMobile: true });
+const page = await ctx.newPage();
+const erros = [];
+page.on('console', (m) => m.type() === 'error' && erros.push(m.text()));
+page.on('pageerror', (e) => erros.push(e.message));
+const aviso = () => page.getByTestId('aviso');
+const valorDe = (id) => page.locator(`#campo-${id}`).inputValue();
+
+// 1. Tela vazia explica o que dá para fazer
+await page.goto(`${URL_APP}/dividas`);
+await page.getByRole('heading', { name: 'Dívidas', exact: true }).waitFor();
+confere('Dívidas: tela inicial explica que dá para anexar o contrato', await page.getByText(/Anexe o contrato em PDF/).isVisible());
+await verificarTela(page, 'Dívidas vazia · celular');
+
+// 2. Cadastro com o contrato em PDF
+await page.getByRole('link', { name: 'Cadastrar o primeiro empréstimo' }).click();
+await page.getByRole('heading', { name: 'Cadastrar empréstimo' }).waitFor();
+confere('Formulário tem o botão "Anexar contrato (PDF)"', await page.getByText('Anexar contrato (PDF)').isVisible());
+await page.locator('#campo-contrato').setInputFiles(CONTRATO);
+await page.getByTestId('resultado-leitura').filter({ hasText: /encontrei/ }).waitFor({ timeout: 30000 });
+const leitura = await page.getByTestId('resultado-leitura').innerText();
+confere('Leitor: encontrou os 13 termos do contrato', leitura.includes('encontrei 13 termos'), leitura);
+confere('Leitor: valor emprestado R$ 10.000,00', (await valorDe('valorEmprestado')) === '10.000,00');
+confere('Leitor: 36 parcelas de R$ 385,43', (await valorDe('numeroParcelas')) === '36' && (await valorDe('valorParcela')) === '385,43');
+confere('Leitor: taxa de juros 1,89% ao mês', (await valorDe('taxaJuros')) === '1,89' && (await valorDe('periodoTaxa')) === 'mes');
+confere('Leitor: CET 27,58% ao ano', (await valorDe('cetAnual')) === '27,58');
+confere('Leitor: multa 2% e juros de mora 1% ao mês', (await valorDe('multaAtraso')) === '2' && (await valorDe('jurosMora')) === '1' && (await valorDe('periodoMora')) === 'mes');
+confere('Leitor: banco e número do contrato', (await valorDe('instituicao')) === 'Banco Horizonte S.A.' && (await valorDe('numeroContrato')) === '123456789-0');
+confere('Leitor: 1ª parcela 10/04/2025 e contratação 10/03/2025', (await page.getByTestId('campo-dataPrimeiraParcela-texto').innerText()) === '10/04/2025' && (await valorDe('dataContratacao')) === '10/03/2025');
+confere('Leitor: tipo "Consignado"', (await valorDe('tipo')) === 'consignado');
+const selos = await page.getByText('lido do contrato · ver trecho').count();
+confere('Cada um dos 13 valores lidos tem o selo "lido do contrato"', selos === 13, `${selos} selos`);
+await page.getByText('lido do contrato · ver trecho').nth(selos > 6 ? 6 : 0).click();
+confere('Selo mostra o trecho do contrato de onde saiu o valor', await page.locator('details[open] q').first().isVisible());
+const conferencia = nb(await page.getByTestId('conferencia-taxa').innerText());
+confere('Conferência da taxa: parcelas batem com 1,89% ao mês', conferencia.includes('1,89% ao mês') && conferencia.includes('Bate com a taxa do contrato'), conferencia);
+const larguraTaxa = await page.locator('#campo-taxaJuros').evaluate((el) => el.getBoundingClientRect().width);
+const larguraMora = await page.locator('#campo-jurosMora').evaluate((el) => el.getBoundingClientRect().width);
+confere('Campos de taxa e de mora têm largura para ler o número (≥ 120px)', larguraTaxa >= 120 && larguraMora >= 120, `${Math.round(larguraTaxa)}px / ${Math.round(larguraMora)}px`);
+await page.screenshot({ path: join(CAPTURAS, 'divida-form-lido.png'), fullPage: true });
+await verificarTela(page, 'Cadastro de dívida · celular');
+
+// Validações
+await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
+confere('Exige um nome para o empréstimo', await page.getByText(/Dê um nome/).isVisible());
+await page.locator('#campo-nome').fill('Consignado do carro');
+await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
+confere('Exige confirmar que conferiu os valores com o contrato', await page.getByText(/Confira os valores lidos/).isVisible());
+// 1ª parcela em 10/04/2025: até hoje já venceram as parcelas até o mês passado/este mês
+const venc = (k) => { const d = new Date(2025, 3 + k - 1, 10); return d; };
+let jaVencidas = 0;
+for (let k = 1; k <= 36; k++) if (venc(k) < new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())) jaVencidas = k;
+await page.locator('#campo-parcelasJaPagas').fill(String(jaVencidas));
+await page.locator('#campo-conferido').check();
+await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
+await page.getByRole('heading', { name: 'Consignado do carro' }).waitFor();
+confere('Salvou e abriu a página do contrato', nb(await aviso().innerText()).includes('“Consignado do carro” cadastrado.'));
+
+// 3. Página do contrato: juros que está pagando
+confere('Mostra nome personalizado + número do contrato', (await page.getByText('Banco Horizonte S.A. · Contrato nº 123456789-0').count()) === 1);
+const juros = nb(await page.getByTestId('tabela-juros').innerText());
+confere('Juros: parcela sem juros R$ 277,78 → com juros R$ 385,43', juros.includes('R$ 277,78 → R$ 385,43'), juros.replace(/\n/g, ' · '));
+confere('Juros: R$ 3.875,48 no contrato todo (38,8% a mais)', juros.includes('R$ 3.875,48') && juros.includes('38,8% a mais'));
+confere('Juros: 1,89% ao mês = 0,062% ao dia = 25,19% ao ano (do contrato)', juros.includes('1,89% ao mês') && juros.includes('0,062% ao dia') && juros.includes('25,19% ao ano') && juros.includes('(do contrato)'));
+confere('Juros: CET 27,58% ao ano', juros.includes('27,58% ao ano'));
+confere(`Situação: ${jaVencidas} de 36 pagas`, (await page.getByText(`${jaVencidas} de 36`, { exact: true }).count()) === 1);
+confere('Mensagem de parabéns por pagar em dia', await page.getByTestId('mensagem-parabens').isVisible() || await page.getByTestId('mensagem-lembrete').isVisible());
+confere('Contrato guardado pode ser aberto', await page.getByRole('link', { name: 'Abrir contrato' }).isVisible());
+await page.getByText('Ver de onde vieram os termos').click();
+confere('Mostra de onde vieram os termos (trechos do contrato)', await page.getByText(/juros de mora de 1%/i).first().isVisible());
+await page.screenshot({ path: join(CAPTURAS, 'divida-detalhe.png'), fullPage: true });
+await verificarTela(page, 'Detalhe da dívida · celular');
+
+// 4. Registrar pagamento (em dia) e desfazer
+const proxima = jaVencidas + 1;
+await page.getByRole('button', { name: `Registrar pagamento da parcela ${proxima}` }).click();
+await aviso().filter({ hasText: `Parcela ${proxima}` }).waitFor({ timeout: 5000 }).catch(() => {});
+const msgPag = nb(await aviso().innerText());
+confere('Pagamento em dia recebe parabéns', msgPag.includes(`Parcela ${proxima} paga em dia. Parabéns!`), msgPag);
+await page.getByText(`${proxima} de 36`, { exact: true }).waitFor({ timeout: 5000 }).catch(() => {});
+confere('Contador de pagas sobe', (await page.getByText(`${proxima} de 36`, { exact: true }).count()) === 1);
+await page.goto(`${URL_APP}/lancamentos`);
+const lista = nb(await page.getByTestId('lista-lancamentos').innerText());
+confere('Pagamento vira despesa em Lançamentos (Dívidas › Parcela de empréstimo)', lista.includes(`Consignado do carro — parcela ${proxima} de 36`) && lista.includes('Dívidas › Parcela de empréstimo'));
+await page.goBack();
+await page.getByRole('heading', { name: 'Consignado do carro' }).waitFor();
+
+// 5. Segundo empréstimo, à mão, com parcela atrasada há 10 dias e sem taxa (app calcula)
+const dias = 10;
+const vencAtrasada = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - dias);
+const primeira = new Date(vencAtrasada.getFullYear(), vencAtrasada.getMonth() - 4, vencAtrasada.getDate());
+await page.goto(`${URL_APP}/dividas/novo`);
+await page.locator('#campo-nome').fill('Empréstimo da reforma');
+await page.locator('#campo-instituicao').fill('Banco Horizonte');
+await page.locator('#campo-numeroContrato').fill('0098-7654');
+await page.locator('#campo-valorEmprestado').fill('1.000,00');
+await page.locator('#campo-numeroParcelas').fill('10');
+await page.locator('#campo-valorParcela').fill('105,58');
+await page.locator('#campo-dataPrimeiraParcela').fill(iso(primeira));
+confere('Sem taxa informada, o app calcula pelas parcelas (1,00% ao mês)', nb(await page.getByTestId('conferencia-taxa').innerText()).includes('1,00% ao mês'));
+await page.locator('#campo-parcelasJaPagas').fill('4');
+await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
+await page.getByRole('heading', { name: 'Empréstimo da reforma' }).waitFor();
+const esperado = 105_58 + 2_11 + Math.round((105_58 * 0.01 / 30) * dias);
+const fmt = (c) => `R$ ${Math.floor(c / 100).toLocaleString('pt-BR')},${String(c % 100).padStart(2, '0')}`;
+const atraso = nb(await page.getByTestId('atraso-5').innerText());
+confere(`Atraso: parcela 5 há ${dias} dias = ${fmt(esperado)} (parcela + multa 2% + mora 1% ao mês por dia)`, atraso.includes(fmt(esperado)) && atraso.includes('R$ 2,11'), atraso.replace(/\n/g, ' · '));
+confere('Alerta de atraso com o custo de cada dia', await page.getByTestId('mensagem-atraso').isVisible() && (await page.getByText(/Se continuar atrasando/).isVisible()));
+confere('Juros calculados pelas parcelas quando o contrato não informa', nb(await page.getByTestId('tabela-juros').innerText()).includes('(calculada pelas parcelas)'));
+confere('Valor sugerido do pagamento já inclui multa e juros', (await page.locator('#campo-valor-pago').inputValue()) === fmt(esperado).replace('R$ ', ''));
+await page.screenshot({ path: join(CAPTURAS, 'divida-atrasada.png'), fullPage: true });
+await verificarTela(page, 'Dívida atrasada · celular');
+
+// 6. Lista: atrasada aparece primeiro, com resumo
+await page.locator('nav.fixed').getByRole('link', { name: 'Dívidas' }).click();
+await page.getByLabel('Resumo das dívidas').waitFor();
+const primeiroCartao = nb(await page.locator('main li').first().innerText());
+confere('Lista: contrato atrasado aparece primeiro e marcado', primeiroCartao.startsWith('Empréstimo da reforma') && primeiroCartao.includes('Atrasado'));
+confere('Lista: mostra "contrato anexado" no consignado', (await page.getByText('contrato anexado').count()) === 1);
+await page.screenshot({ path: join(CAPTURAS, 'dividas-lista.png'), fullPage: true });
+await verificarTela(page, 'Lista de dívidas · celular');
+
+// 7. Editar e anexar contrato escaneado (sem texto)
+await page.getByRole('link', { name: /Empréstimo da reforma/ }).click();
+await page.getByRole('link', { name: 'Editar' }).click();
+await page.locator('#campo-contrato').setInputFiles(ESCANEADO);
+await page.getByTestId('resultado-leitura').filter({ hasText: /foto|digitaliza/ }).waitFor({ timeout: 30000 });
+confere('PDF escaneado (foto): avisa para preencher à mão e guarda o arquivo', true);
+await page.locator('#campo-conferido').check();
+await page.getByRole('button', { name: 'Salvar alterações' }).click();
+await page.getByRole('heading', { name: 'Empréstimo da reforma' }).waitFor();
+confere('Contrato escaneado ficou guardado', await page.getByRole('link', { name: 'Abrir contrato' }).isVisible());
+
+// 8. Persistência
+await page.reload();
+await page.getByRole('heading', { name: 'Empréstimo da reforma' }).waitFor();
+confere('Depois de recarregar, tudo continua', await page.getByTestId('atraso-5').isVisible());
+
+// 9. Excluir com confirmação
+await page.getByRole('button', { name: 'Excluir empréstimo' }).click();
+await page.getByRole('button', { name: 'Excluir', exact: true }).click();
+await page.getByLabel('Resumo das dívidas').waitFor();
+confere('Excluir pede confirmação e remove da lista', (await page.locator('main li').count()) === 1);
+
+// 10. Notebook
+const ctx2 = await navegador.newContext({ viewport: { width: 1280, height: 900 }, locale: 'pt-BR' });
+const p2 = await ctx2.newPage();
+await p2.goto(`${URL_APP}/dividas/novo`);
+await p2.getByRole('heading', { name: 'Cadastrar empréstimo' }).waitFor();
+await verificarTela(p2, 'Cadastro de dívida · notebook');
+await p2.screenshot({ path: join(CAPTURAS, 'divida-form-notebook.png'), fullPage: true });
+await ctx2.close();
+
+confere('Nenhum erro no console durante a auditoria de dívidas', erros.length === 0, erros.join(' | '));
+await navegador.close();
+encerrar();

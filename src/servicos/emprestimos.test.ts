@@ -1,0 +1,79 @@
+import { describe, expect, it } from 'vitest';
+import type { Emprestimo, PagamentoParcela } from '../tipos';
+import { resumirEmprestimo, validarEmprestimo, type DadosEmprestimo } from './emprestimos';
+
+// Exemplo dos layouts: R$ 1.000,00 em 10x de R$ 105,58, juros de 1% ao mês, 1ª parcela em 25/06/2026.
+const reforma: Emprestimo = {
+  id: 1, nome: 'Empréstimo da reforma', instituicao: 'Banco Horizonte', numeroContrato: '0098-7654', tipo: 'pessoal',
+  valorEmprestado: 1000_00, numeroParcelas: 10, valorParcela: 105_58, taxaJuros: 1, periodoTaxa: 'mes', cetAnual: null,
+  sistema: 'price', dataContratacao: '2026-05-25', dataPrimeiraParcela: '2026-06-25', multaAtraso: 2, jurosMora: 1, periodoMora: 'mes',
+  trechos: {}, termosConferidos: true, contratoArquivoId: null, criadoEm: '',
+};
+const pago = (n: number, data: string): PagamentoParcela => ({ emprestimoId: 1, numeroParcela: n, dataPagamento: data, valorPago: 105_58, lancamentoId: null });
+const quatroEmDia = [pago(1, '2026-06-25'), pago(2, '2026-07-24'), pago(3, '2026-08-25'), pago(4, '2026-09-25')];
+
+describe('situação do empréstimo', () => {
+  it('parcela 5 (venceu domingo 25/10) está atrasada 4 dias em 29/10, com os encargos do contrato', () => {
+    const r = resumirEmprestimo(reforma, quatroEmDia, '2026-10-29');
+    const p5 = r.parcelas[4];
+    expect(p5.vencimento).toBe('2026-10-25');
+    expect(p5.vencimentoUtil).toBe('2026-10-26'); // domingo → segunda
+    expect(p5.status).toBe('atrasada');
+    expect(p5.encargos).toMatchObject({ diasAtraso: 4, multa: 2_11, mora: 14, total: 107_83 });
+    expect(r.status).toBe('atrasado');
+    expect(r.mensagem.tipo).toBe('atraso');
+    expect(r.mensagem.texto).toContain('R$');
+    expect(r.pagas).toBe(4);
+    expect(r.faltam).toBe(6);
+  });
+  it('vencimento em fim de semana: pagar na segunda não é atraso', () => {
+    const r = resumirEmprestimo(reforma, quatroEmDia, '2026-10-26');
+    expect(r.parcelas[4].status).toBe('vence-hoje'); // ainda dá para pagar sem multa
+    expect(r.status).toBe('em-dia');
+  });
+  it('em dia: mensagem de parabéns com a sequência', () => {
+    const r = resumirEmprestimo(reforma, quatroEmDia, '2026-10-10');
+    expect(r.sequenciaEmDia).toBe(4);
+    expect(r.mensagem.tipo).toBe('parabens');
+    expect(r.mensagem.texto).toContain('4 parcelas seguidas em dia');
+  });
+  it('lembrete 3 dias antes do vencimento', () => {
+    const r = resumirEmprestimo(reforma, quatroEmDia, '2026-10-22');
+    expect(r.mensagem.tipo).toBe('lembrete');
+  });
+  it('juros do contrato: parcela sem juros vs com juros', () => {
+    const r = resumirEmprestimo(reforma, quatroEmDia, '2026-10-10');
+    expect(r.parcelaSemJuros).toBe(100_00);
+    expect(r.jurosTotalContrato).toBe(55_80);
+    expect(r.jurosPorParcelaMedio).toBe(5_58);
+    expect(r.fonteTaxa).toBe('contrato');
+    expect(r.taxaDiverge).toBe(false);
+    expect(r.saldoDevedor).toBe(611_89);
+    expect(r.economiaQuitandoHoje).toBe(633_48 - 611_89);
+  });
+  it('sem taxa no contrato: calcula pelas parcelas', () => {
+    const r = resumirEmprestimo({ ...reforma, taxaJuros: null }, [], '2026-06-01');
+    expect(r.fonteTaxa).toBe('calculada');
+    expect(r.taxaMensal!.toFixed(2)).toBe('1.00');
+  });
+  it('avisa quando a taxa do contrato não bate com as parcelas (seguro/tarifa embutidos)', () => {
+    const r = resumirEmprestimo({ ...reforma, valorParcela: 110_00 }, [], '2026-06-01');
+    expect(r.taxaDiverge).toBe(true);
+  });
+  it('quitado', () => {
+    const todas = Array.from({ length: 10 }, (_, k) => pago(k + 1, '2026-06-25'));
+    const r = resumirEmprestimo(reforma, todas, '2027-05-01');
+    expect(r.status).toBe('quitado');
+    expect(r.saldoDevedor).toBe(0);
+    expect(r.mensagem.tipo).toBe('quitado');
+  });
+});
+
+describe('validação do cadastro', () => {
+  const base: DadosEmprestimo = { ...reforma, parcelasJaPagas: 0 };
+  it('aceita um cadastro completo', () => expect(validarEmprestimo(base)).toEqual({}));
+  it('exige nome, valores e data', () => {
+    const e = validarEmprestimo({ ...base, nome: ' ', valorEmprestado: 0, valorParcela: 0, numeroParcelas: 0, dataPrimeiraParcela: '' });
+    expect(Object.keys(e).sort()).toEqual(['dataPrimeiraParcela', 'nome', 'numeroParcelas', 'valorEmprestado', 'valorParcela']);
+  });
+});

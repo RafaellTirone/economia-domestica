@@ -5,7 +5,6 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { pedirArmazenamentoPersistente } from './db/armazenamento';
-import { ProvedorAvisos } from './hooks/useAvisos';
 import { ProvedorMes } from './hooks/useMes';
 
 // Ponto de entrada do app.
@@ -17,9 +16,7 @@ createRoot(document.getElementById('raiz')!).render(
   <StrictMode>
     <BrowserRouter>
       <ProvedorMes>
-        <ProvedorAvisos>
-          <App />
-        </ProvedorAvisos>
+        <App />
       </ProvedorMes>
     </BrowserRouter>
   </StrictMode>,

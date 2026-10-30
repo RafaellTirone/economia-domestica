@@ -94,18 +94,44 @@ confere('Campos de taxa e de mora têm largura para ler o número (≥ 120px)', 
 await page.screenshot({ path: join(CAPTURAS, 'divida-form-lido.png'), fullPage: true });
 await verificarTela(page, 'Cadastro de dívida · celular');
 
+// Conferência automática: a lista vem preenchida pela análise do app
+const itemDaLista = async (rotulo) => {
+  const li = page.getByTestId('lista-conferencia').locator('li').filter({ hasText: rotulo }).first();
+  return { situacao: await li.getAttribute('data-situacao'), texto: nb(await li.innerText()) };
+};
+confere('Conferência automática: "tudo confere"', (await page.getByTestId('resumo-conferencia').innerText()).includes('tudo confere'));
+let item = await itemDaLista('Valor do empréstimo');
+confere('Lista: Valor do empréstimo ✓ R$ 10.000,00', item.situacao === 'ok' && item.texto.includes('R$ 10.000,00'), item.texto);
+item = await itemDaLista('Valor da parcela');
+confere('Lista: Valor da parcela ✓ R$ 385,43', item.situacao === 'ok' && item.texto.includes('R$ 385,43'), item.texto);
+item = await itemDaLista('Número de parcelas');
+confere('Lista: Número de parcelas ✓ 36', item.situacao === 'ok' && item.texto.includes('36'));
+item = await itemDaLista('Taxa de juros');
+confere('Lista: Taxa de juros ✓ 1,89% ao mês', item.situacao === 'ok' && item.texto.includes('1,89% ao mês'));
+item = await itemDaLista('Multa por atraso');
+confere('Lista: Multa ✓ 2% dentro do limite do CDC', item.situacao === 'ok' && item.texto.includes('dentro do limite'));
+confere('Lista: os 10 itens conferem', (await page.getByTestId('lista-conferencia').locator('li[data-situacao="ok"]').count()) === 10);
+confere('Caixa "Conferido" vem marcada automaticamente', await page.locator('#campo-conferido').isChecked() && await page.getByText('Conferido automaticamente pela análise do app.').isVisible());
+// Se a parcela não bater com a taxa, o app aponta e desmarca sozinho
+await page.locator('#campo-valorParcela').fill('400,00');
+item = await itemDaLista('Parcela confere com a taxa');
+confere('Parcela diferente da taxa: item ⚠ explicando seguro/tarifa', item.situacao === 'atencao' && item.texto.includes('seguro ou tarifa'), item.texto);
+item = await itemDaLista('Valor da parcela');
+confere('Valor alterado à mão: item ⚠ mostra o valor que está no contrato (R$ 385,43)', item.situacao === 'atencao' && item.texto.includes('no contrato está R$ 385,43'), item.texto);
+confere('…e a caixa "Conferido" é desmarcada sozinha', !(await page.locator('#campo-conferido').isChecked()) && (await page.getByTestId('resumo-conferencia').innerText()).includes('para você conferir'));
+await page.screenshot({ path: join(CAPTURAS, 'divida-conferencia-atencao.png'), fullPage: true });
+await page.locator('#campo-valorParcela').fill('385,43');
+confere('Corrigindo a parcela, volta a marcar sozinho', await page.locator('#campo-conferido').isChecked() && (await itemDaLista('Valor da parcela')).situacao === 'ok');
+
 // Validações
 await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
 confere('Exige um nome para o empréstimo', await page.getByText(/Dê um nome/).isVisible());
 await page.locator('#campo-nome').fill('Consignado do carro');
-await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
-confere('Exige confirmar que conferiu os valores com o contrato', await page.getByText(/Confira os valores lidos/).isVisible());
 // 1ª parcela em 10/04/2025: até hoje já venceram as parcelas até o mês passado/este mês
 const venc = (k) => { const d = new Date(2025, 3 + k - 1, 10); return d; };
 let jaVencidas = 0;
 for (let k = 1; k <= 36; k++) if (venc(k) < new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())) jaVencidas = k;
 await page.locator('#campo-parcelasJaPagas').fill(String(jaVencidas));
-await page.locator('#campo-conferido').check();
 await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
 await page.getByRole('heading', { name: 'Consignado do carro' }).waitFor();
 confere('Salvou e abriu a página do contrato', nb(await aviso().innerText()).includes('“Consignado do carro” cadastrado.'));
@@ -120,6 +146,7 @@ confere('Juros: CET 27,58% ao ano', juros.includes('27,58% ao ano'));
 confere(`Situação: ${jaVencidas} de 36 pagas`, (await page.getByText(`${jaVencidas} de 36`, { exact: true }).count()) === 1);
 confere('Mensagem de parabéns por pagar em dia', await page.getByTestId('mensagem-parabens').isVisible() || await page.getByTestId('mensagem-lembrete').isVisible());
 confere('Contrato guardado pode ser aberto', await page.getByRole('link', { name: 'Abrir contrato' }).isVisible());
+confere('Página do contrato mostra "Conferido automaticamente pela análise do app" e a lista', (await page.getByTestId('situacao-conferencia').innerText()).includes('Conferido automaticamente pela análise do app') && await page.getByTestId('lista-conferencia').isVisible());
 await page.getByText('Ver de onde vieram os termos').click();
 confere('Mostra de onde vieram os termos (trechos do contrato)', await page.getByText(/juros de mora de 1%/i).first().isVisible());
 await page.screenshot({ path: join(CAPTURAS, 'divida-detalhe.png'), fullPage: true });

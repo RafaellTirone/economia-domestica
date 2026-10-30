@@ -2,10 +2,13 @@ import { ArrowLeft, FileCheck2, FileText, FileWarning, Loader2, Upload, X } from
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CampoData } from '../componentes/ui/CampoData';
+import { ListaConferencia } from '../componentes/ui/ListaConferencia';
 import { useAvisos } from '../hooks/useAvisos';
 import { useEmprestimo } from '../hooks/useDados';
+import { conferirContrato } from '../servicos/conferenciaContrato';
 import { atualizarEmprestimo, criarEmprestimo, guardarArquivo, validarEmprestimo, type DadosEmprestimo } from '../servicos/emprestimos';
 import { converterTaxa, formatarTaxa, NOME_PERIODO, taxaImplicita } from '../servicos/juros';
+import { formatarMoeda } from '../utils/moeda';
 import { analisarTextoContrato, extrairTextoDoPdf, type TermosLidos } from '../servicos/leitorContrato';
 import type { PeriodoTaxa, TipoEmprestimo } from '../tipos';
 import { adicionarMeses, formatarData, hojeISO, lerData } from '../utils/datas';
@@ -54,6 +57,8 @@ export function EmprestimoForm() {
   const [c, setC] = useState<Campos>(VAZIO);
   const [lidos, setLidos] = useState<Set<string>>(new Set());
   const [trechos, setTrechos] = useState<Partial<Record<string, string>>>({});
+  /** Valores exatamente como o app leu no contrato (para avisar se algum for alterado). */
+  const [termosLidos, setTermosLidos] = useState<TermosLidos | null>(null);
   const [arquivoNovo, setArquivoNovo] = useState<File | null>(null);
   const [arquivoAtualId, setArquivoAtualId] = useState<number | null>(null);
   const [nomeArquivoAtual, setNomeArquivoAtual] = useState('');
@@ -62,6 +67,8 @@ export function EmprestimoForm() {
   const [erros, setErros] = useState<Record<string, string>>({});
   const [salvando, setSalvando] = useState(false);
   const carregado = useRef(false);
+  /** A pessoa mexeu na caixa "Conferido" (aí o app não muda mais sozinho). */
+  const conferidoManual = useRef(false);
 
   useEffect(() => {
     if (!existente || carregado.current) return;
@@ -77,6 +84,7 @@ export function EmprestimoForm() {
     setTrechos(e.trechos ?? {});
     setLidos(new Set(Object.keys(e.trechos ?? {})));
     setConferido(e.termosConferidos);
+    conferidoManual.current = e.termosConferidos && !e.conferenciaAutomatica;
     setArquivoAtualId(e.contratoArquivoId);
     setNomeArquivoAtual(existente.arquivo?.nome ?? '');
   }, [existente]);
@@ -98,6 +106,7 @@ export function EmprestimoForm() {
     }
     setArquivoNovo(arquivo);
     setConferido(false);
+    conferidoManual.current = false;
     setLeitura({ estado: 'lendo', texto: 'Lendo o contrato no seu aparelho…' });
     try {
       const { texto, paginas, temTexto } = await extrairTextoDoPdf(arquivo);
@@ -107,6 +116,7 @@ export function EmprestimoForm() {
       }
       const r = analisarTextoContrato(texto);
       aplicarTermos(r.termos);
+      setTermosLidos(r.termos);
       setTrechos(r.trechos);
       setLidos(new Set(Object.keys(r.trechos)));
       setLeitura(r.encontrados > 0
@@ -145,6 +155,7 @@ export function EmprestimoForm() {
     setLeitura(null);
     setLidos(new Set());
     setTrechos({});
+    setTermosLidos(null);
   }
 
   // Valores interpretados (para validar e para a conferência da taxa)
@@ -156,6 +167,22 @@ export function EmprestimoForm() {
   const taxaInformadaMes = taxaInformada !== null && !Number.isNaN(taxaInformada) ? converterTaxa(taxaInformada, c.periodoTaxa, 'mes') : null;
   const diverge = implicita !== null && taxaInformadaMes !== null && Math.abs(implicita - taxaInformadaMes) > 0.05;
   const temContrato = !!arquivoNovo || !!arquivoAtualId;
+  const conferencia = temContrato && lidos.size > 0 && valorEmprestado > 0 && valorParcela > 0 && numeroParcelas > 0
+    ? conferirContrato({
+      lidos, valorEmprestado, numeroParcelas, valorParcela,
+      taxaJuros: taxaInformada !== null && !Number.isNaN(taxaInformada) ? taxaInformada : null, periodoTaxa: c.periodoTaxa,
+      cetAnual: (() => { const v = lerPct(c.cetAnual); return v !== null && !Number.isNaN(v) ? v : null; })(),
+      multaAtraso: lerPct(c.multaAtraso) || 0, jurosMora: lerPct(c.jurosMora) || 0, periodoMora: c.periodoMora,
+      dataPrimeiraParcela: c.dataPrimeiraParcela, instituicao: c.instituicao.trim(), numeroContrato: c.numeroContrato.trim(),
+      originais: termosLidos ? originaisDoContrato(termosLidos) : undefined,
+    })
+    : null;
+  const tudoCerto = conferencia?.tudoCerto ?? false;
+
+  // A análise do app marca (ou desmarca) "Conferido" sozinha, até a pessoa mexer na caixa.
+  useEffect(() => {
+    if (conferencia && !conferidoManual.current) setConferido(tudoCerto);
+  }, [tudoCerto, conferencia !== null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function salvar(e: FormEvent) {
     e.preventDefault();
@@ -165,7 +192,8 @@ export function EmprestimoForm() {
       valorEmprestado, numeroParcelas, valorParcela, dataPrimeiraParcela: c.dataPrimeiraParcela, dataContratacao,
       taxaJuros: taxaInformada, periodoTaxa: c.periodoTaxa, cetAnual: lerPct(c.cetAnual), sistema: c.sistema,
       multaAtraso: lerPct(c.multaAtraso) ?? 0, jurosMora: lerPct(c.jurosMora) ?? 0, periodoMora: c.periodoMora,
-      trechos, termosConferidos: temContrato ? conferido : false, observacao: c.observacao.trim() || undefined,
+      trechos, termosConferidos: temContrato ? conferido : false,
+      conferenciaAutomatica: !!conferencia && conferido && tudoCerto && !conferidoManual.current, observacao: c.observacao.trim() || undefined,
       parcelasJaPagas: editando ? 0 : Number(c.parcelasJaPagas) || 0,
     };
     const encontrados = validarEmprestimo(dados);
@@ -176,7 +204,7 @@ export function EmprestimoForm() {
     if (Number.isNaN(lerPct(c.multaAtraso))) encontrados.multaAtraso = 'Multa inválida. Exemplo: 2';
     if (Number.isNaN(lerPct(c.jurosMora))) encontrados.jurosMora = 'Juros de mora inválidos. Exemplo: 1';
     if (c.dataContratacao.trim() && !dataContratacao) encontrados.dataContratacao = 'Use o formato dd/mm/aaaa.';
-    if (temContrato && lidos.size > 0 && !conferido) encontrados.conferido = 'Confira os valores lidos com o contrato e marque esta caixa.';
+    if (temContrato && lidos.size > 0 && !conferido) encontrados.conferido = 'Confira no contrato os itens marcados com ⚠ e marque esta caixa.';
     setErros(encontrados);
     const ordem = ['nome', 'valorEmprestado', 'numeroParcelas', 'valorParcela', 'dataPrimeiraParcela', 'dataContratacao', 'taxaJuros', 'cetAnual', 'multaAtraso', 'jurosMora', 'parcelasJaPagas', 'conferido'];
     const primeiro = ordem.find((k) => encontrados[k]);
@@ -337,11 +365,24 @@ export function EmprestimoForm() {
         <textarea id="campo-observacao" rows={2} maxLength={500} value={c.observacao} onChange={(e) => muda('observacao', e.target.value)} className={`${ENTRADA} py-2`} />
       </Campo>
 
+      {conferencia && (
+        <section aria-label="Conferência automática do contrato" className="flex flex-col gap-3 rounded-[22px] border border-borda bg-cartao p-4 md:p-5">
+          <h2 className="m-0 text-sm font-extrabold text-suave">Conferência automática do contrato</h2>
+          <p className={`m-0 text-sm font-bold ${tudoCerto ? 'text-ok-texto' : 'text-alerta-texto'}`} data-testid="resumo-conferencia">
+            {tudoCerto
+              ? `O app analisou o contrato e tudo confere (${conferencia.itens.filter((i) => i.situacao === 'ok').length} de ${conferencia.itens.length} itens encontrados).`
+              : `O app analisou o contrato e encontrou ${conferencia.pendencias} ${conferencia.pendencias === 1 ? 'ponto' : 'pontos'} para você conferir (marcados com ⚠ e borda).`}
+          </p>
+          <ListaConferencia conferencia={conferencia} />
+        </section>
+      )}
+
       {temContrato && (
         <div>
-          <label className={`flex min-h-12 items-start gap-3 rounded-2xl border p-3 text-[15px] ${erros.conferido ? 'border-status-perigo' : 'border-borda bg-cartao'}`}>
-            <input id="campo-conferido" type="checkbox" checked={conferido} onChange={(e) => { setConferido(e.target.checked); setErros((x) => ({ ...x, conferido: '' })); }} className="mt-0.5 h-6 w-6 shrink-0 accent-primaria" />
-            <span><strong>Conferi os valores acima com o contrato.</strong><br /><span className="text-sm text-suave">O app usa esses termos para calcular juros e atrasos.</span></span>
+          <label className={`flex min-h-12 items-start gap-3 rounded-2xl border p-3 text-[15px] ${erros.conferido ? 'border-status-perigo' : conferido ? 'border-[#BFE5C8] bg-[#E7F6EA]' : 'border-borda bg-cartao'}`}>
+            <input id="campo-conferido" type="checkbox" checked={conferido} onChange={(e) => { conferidoManual.current = true; setConferido(e.target.checked); setErros((x) => ({ ...x, conferido: '' })); }} className="mt-0.5 h-6 w-6 shrink-0 accent-primaria" />
+            <span><strong>{conferencia && tudoCerto && !conferidoManual.current ? 'Conferido automaticamente pela análise do app.' : 'Conferi os valores acima com o contrato.'}</strong><br />
+              <span className="text-sm text-suave">{conferencia && !tudoCerto && !conferido ? 'Olhe no contrato os itens com ⚠ e marque esta caixa.' : 'O app usa esses termos para calcular juros e atrasos. Você pode desmarcar se algo estiver errado.'}</span></span>
           </label>
           {erros.conferido && <p role="alert" className="m-0 mt-1 text-sm font-bold text-perigo-texto">{erros.conferido}</p>}
         </div>
@@ -352,6 +393,19 @@ export function EmprestimoForm() {
       </button>
     </form>
   );
+}
+
+/** Valores lidos do contrato, no mesmo formato que a lista de conferência mostra. */
+function originaisDoContrato(t: TermosLidos): Partial<Record<string, string>> {
+  const o: Partial<Record<string, string>> = {};
+  if (t.valorEmprestado) o.valorEmprestado = formatarMoeda(t.valorEmprestado);
+  if (t.numeroParcelas) o.numeroParcelas = String(t.numeroParcelas);
+  if (t.valorParcela) o.valorParcela = formatarMoeda(t.valorParcela);
+  if (t.taxaJuros !== undefined) o.taxa = `${formatarTaxa(t.taxaJuros)} ${NOME_PERIODO[t.periodoTaxa ?? 'mes']}`;
+  if (t.multaAtraso !== undefined) o.multa = formatarTaxa(t.multaAtraso);
+  if (t.jurosMora !== undefined) o.mora = `${formatarTaxa(t.jurosMora)} ${NOME_PERIODO[t.periodoMora ?? 'mes']}`;
+  if (t.dataPrimeiraParcela) o.datas = formatarData(t.dataPrimeiraParcela);
+  return o;
 }
 
 const ENTRADA = 'min-h-12 w-full rounded-xl border border-borda-forte bg-cartao px-3 text-base text-tinta';

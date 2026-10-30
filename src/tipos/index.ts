@@ -100,8 +100,10 @@ export interface Emprestimo {
   periodoMora: PeriodoTaxa;
   /** Onde cada termo foi encontrado no contrato (trecho do texto), para conferência. */
   trechos: Partial<Record<string, string>>;
-  /** A pessoa conferiu os termos com o contrato. */
+  /** Os termos foram conferidos com o contrato. */
   termosConferidos: boolean;
+  /** A conferência foi feita automaticamente pela análise do app (tudo bateu). */
+  conferenciaAutomatica?: boolean;
   contratoArquivoId: number | null;
   observacao?: string;
   criadoEm: string;

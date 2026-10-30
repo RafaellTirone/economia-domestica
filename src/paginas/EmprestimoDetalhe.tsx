@@ -3,8 +3,10 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CaixaMensagem } from '../componentes/ui/CaixaMensagem';
 import { CampoData } from '../componentes/ui/CampoData';
+import { ListaConferencia } from '../componentes/ui/ListaConferencia';
 import { useAvisos } from '../hooks/useAvisos';
 import { useEmprestimo } from '../hooks/useDados';
+import { conferirContrato } from '../servicos/conferenciaContrato';
 import { desfazerPagamento, excluirEmprestimo, registrarPagamento, resumirEmprestimo } from '../servicos/emprestimos';
 import { converterTaxa, encargosDeAtraso, formatarTaxa, NOME_PERIODO } from '../servicos/juros';
 import { diferencaEmDias, formatarData, hojeISO } from '../utils/datas';
@@ -199,7 +201,8 @@ export function EmprestimoDetalhe() {
         ) : (
           <p className="m-0 text-sm text-suave">Nenhum contrato anexado. <Link to={`/dividas/${id}/editar`} className="inline-flex min-h-11 items-center font-bold text-primaria">Anexar o PDF</Link></p>
         )}
-        <p className="m-0 text-sm">{e.termosConferidos ? 'Termos conferidos com o contrato.' : 'Termos ainda não conferidos com um contrato.'} Multa {formatarTaxa(e.multaAtraso)} · juros de mora {formatarTaxa(e.jurosMora)} {NOME_PERIODO[e.periodoMora]}.</p>
+        <p className="m-0 text-sm" data-testid="situacao-conferencia">{e.termosConferidos ? (e.conferenciaAutomatica ? 'Conferido automaticamente pela análise do app.' : 'Termos conferidos por você com o contrato.') : 'Termos ainda não conferidos com um contrato.'} Multa {formatarTaxa(e.multaAtraso)} · juros de mora {formatarTaxa(e.jurosMora)} {NOME_PERIODO[e.periodoMora]}.</p>
+        {Object.keys(e.trechos ?? {}).length > 0 && <ListaConferencia conferencia={conferirContrato({ ...e, lidos: Object.keys(e.trechos) })} />}
         {Object.keys(e.trechos ?? {}).length > 0 && (
           <details className="text-sm">
             <summary className="inline-flex min-h-11 cursor-pointer items-center font-bold text-primaria">Ver de onde vieram os termos</summary>

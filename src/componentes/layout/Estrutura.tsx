@@ -41,6 +41,11 @@ export function Estrutura({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh bg-fundo">
+      {import.meta.env.VITE_PREVIA === 'sim' && (
+        <p className="m-0 bg-alerta-fundo px-4 py-2 text-center text-xs font-bold text-alerta-texto">
+          Versão de teste: os dados ficam só neste navegador e não passam para o app publicado.
+        </p>
+      )}
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-cartao focus:p-3">Pular para o conteúdo</a>
 
       {/* Topo — notebook */}

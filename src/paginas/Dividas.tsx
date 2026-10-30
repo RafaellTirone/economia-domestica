@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { CaixaMensagem } from '../componentes/ui/CaixaMensagem';
 import { useEmprestimos, useLancamentosDoMes } from '../hooks/useDados';
+import { useRegraSalario } from '../servicos/configuracoes';
 import { resumirEmprestimo } from '../servicos/emprestimos';
 import { formatarTaxa, NOME_PERIODO } from '../servicos/juros';
 import { formatarData, hojeISO, partesDaData } from '../utils/datas';
@@ -15,8 +16,9 @@ export function Dividas() {
   const hoje = hojeISO();
   const { ano, mes } = partesDaData(hoje);
   const lancMes = useLancamentosDoMes(ano, mes);
-  const resumos = useMemo(() => (dados ?? []).map((d) => resumirEmprestimo(d.emprestimo, d.pagamentos, hoje))
-    .sort((a, b) => ({ atrasado: 0, 'em-dia': 1, quitado: 2 })[a.status] - ({ atrasado: 0, 'em-dia': 1, quitado: 2 })[b.status]), [dados, hoje]);
+  const regraSalario = useRegraSalario();
+  const resumos = useMemo(() => (dados ?? []).map((d) => resumirEmprestimo(d.emprestimo, d.pagamentos, hoje, regraSalario))
+    .sort((a, b) => ({ atrasado: 0, 'em-dia': 1, quitado: 2 })[a.status] - ({ atrasado: 0, 'em-dia': 1, quitado: 2 })[b.status]), [dados, hoje, regraSalario]);
 
   if (!dados) return <p className="text-suave">Carregando…</p>;
   const ativos = resumos.filter((r) => r.status !== 'quitado');

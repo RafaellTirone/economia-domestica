@@ -102,6 +102,8 @@ export interface Emprestimo {
   trechos: Partial<Record<string, string>>;
   /** Os termos foram conferidos com o contrato. */
   termosConferidos: boolean;
+  /** Consignado: parcelas descontadas direto do salário (conta como paga no dia do salário). */
+  descontoEmFolha?: boolean;
   /** A conferência foi feita automaticamente pela análise do app (tudo bateu). */
   conferenciaAutomatica?: boolean;
   contratoArquivoId: number | null;

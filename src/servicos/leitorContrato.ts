@@ -1,5 +1,5 @@
 import type { Centavos, DataISO, PeriodoTaxa, TipoEmprestimo } from '../tipos';
-import { lerData } from '../utils/datas';
+import { lerData, lerDataPorExtenso } from '../utils/datas';
 import { lerValor } from '../utils/moeda';
 
 // Leitor de contrato: lê o texto do PDF DENTRO do aparelho (nada é enviado para a internet)
@@ -34,7 +34,17 @@ export interface ResultadoLeitura {
 const NUM = '(\\d{1,3}(?:\\.\\d{3})+(?:,\\d{1,4})?|\\d+(?:,\\d{1,4})?)';
 const DINHEIRO = 'R\\$\\s*(\\d{1,3}(?:\\.\\d{3})*,\\d{2}|\\d+,\\d{2})';
 const PERIODO = '(a\\.?\\s?m\\.?|ao\\s+m[eê]s|mensa(?:l|is)|a\\.?\\s?a\\.?|ao\\s+ano|anua(?:l|is)|a\\.?\\s?d\\.?|ao\\s+dia|di[aá]ri[oa]s?)';
-const DATA = '(\\d{2}\\/\\d{2}\\/\\d{4})';
+const DATA = '(\\d{1,2}\\/\\d{1,2}\\/\\d{4}|\\d{1,2}(?:º|°)?\\s+de\\s+[A-Za-zÀ-ú]+\\s+de\\s+\\d{4})';
+/** Lê "10/03/2025" ou "10 de março de 2025". */
+const lerQualquerData = (t: string) => lerData(t) ?? lerDataPorExtenso(t);
+
+/** Bancos e financeiras mais comuns em empréstimos no Brasil (para reconhecer o nome no texto). */
+const BANCOS_CONHECIDOS = [
+  'Banco do Brasil', 'Caixa Econômica Federal', 'Itaú Unibanco', 'Itaú Consignado', 'Itaú', 'Bradesco Financiamentos', 'Bradesco', 'Santander',
+  'Nubank', 'Nu Financeira', 'Banco Inter', 'C6 Bank', 'Banco BMG', 'BMG', 'Banco Pan', 'Banco Daycoval', 'Daycoval', 'Banco Safra', 'Safra',
+  'Banco Mercantil', 'Mercantil do Brasil', 'Agibank', 'Banrisul', 'Sicoob', 'Sicredi', 'Crefisa', 'Facta Financeira', 'Banco Olé', 'BRB',
+  'Banco BV', 'Banco Votorantim', 'PicPay', 'Mercado Pago', 'Banco Cetelem', 'Banco Pine', 'Paraná Banco', 'Banco Master', 'Banco do Nordeste',
+];
 
 /** "1,89" → 1.89 */
 const numero = (t: string) => Number(t.replace(/\./g, '').replace(',', '.'));
@@ -64,11 +74,28 @@ export function analisarTextoContrato(textoOriginal: string): ResultadoLeitura {
   const achar = (re: RegExp) => re.exec(texto);
   const guardar = (campo: keyof TermosLidos, m: RegExpExecArray) => { trechos[campo] = trecho(texto, m.index, m.index + m[0].length); };
 
-  let m = achar(new RegExp(`(?:contrato|c[ée]dula(?: de cr[ée]dito banc[áa]rio)?|ccb|opera[çc][ãa]o|proposta)\\s*(?:n[º°o]\\.?|n\\.?\\s?[º°]|n[úu]mero)\\s*[:\\-]?\\s*([A-Z0-9][A-Z0-9.\\/-]{3,30}[A-Z0-9])`, 'i'));
+  // Número do contrato: "CCB nº 123", "Contrato número 123", "Nº do contrato: 123", "Contrato: 123/2025"
+  const COD = '([A-Z0-9][A-Z0-9.\\/-]{2,30}[A-Z0-9])';
+  const DOC = '(?:contrato|c[ée]dula(?: de cr[ée]dito banc[áa]rio)?|ccb|opera[çc][ãa]o|proposta)';
+  let m = achar(new RegExp(`${DOC}\\s*(?:n[º°o]\\.?|n\\.?\\s?[º°]|n[úu]mero)\\s*[:\\-]?\\s*${COD}`, 'i'))
+    ?? achar(new RegExp(`(?:n[º°o]\\.?|n[úu]mero)\\s*(?:d[oa]\\s+)?${DOC}\\s*[:\\-]?\\s*${COD}`, 'i'))
+    ?? achar(new RegExp(`\\b(?:contrato|ccb|proposta)\\s*:\\s*(?=[A-Z0-9./-]*\\d)${COD}`, 'i'));
   if (m) { termos.numeroContrato = m[1]; guardar('numeroContrato', m); }
 
-  m = achar(/\b((?:Banco|Caixa Econ[ôo]mica|Cooperativa|Financeira)\s+(?:[A-ZÀ-Ú][\wÀ-ú&.-]*|S\.?\/?A\.?|do|da|de|dos)(?:\s+(?:[A-ZÀ-Ú][\wÀ-ú&.-]*|S\.?\/?A\.?|do|da|de|dos)){0,4})/);
-  if (m) { termos.instituicao = m[1].replace(/\s+(do|da|de|dos)$/i, '').trim(); guardar('instituicao', m); }
+  // Banco/instituição: pelo rótulo ("CREDOR: …", "Instituição financeira: …"), por um nome conhecido ou "Banco Fulano S.A."
+  m = achar(/\b(?:credor(?:a)?|institui[çc][ãa]o\s+financeira|institui[çc][ãa]o\s+credora|mutuante|banco\s+credor|financeira)\s*:\s*([A-ZÀ-Ú0-9][^,;\n]{2,60}?)(?=\s*(?:,|;|-|–|\bCNPJ\b|\binscrit|\bcom sede\b|$))/i);
+  if (m) { termos.instituicao = m[1].trim(); guardar('instituicao', m); }
+  if (!termos.instituicao) {
+    for (const nome of BANCOS_CONHECIDOS) {
+      const re = new RegExp(`\\b${nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')}(?:\\s+S\\.?\\/?A\\.?)?`, 'i');
+      m = achar(re);
+      if (m) { termos.instituicao = m[0].trim(); guardar('instituicao', m); break; }
+    }
+  }
+  if (!termos.instituicao) {
+    m = achar(/\b((?:Banco|Caixa Econ[ôo]mica|Cooperativa|Financeira)\s+(?:[A-ZÀ-Ú][\wÀ-ú&.-]*|S\.?\/?A\.?|do|da|de|dos)(?:\s+(?:[A-ZÀ-Ú][\wÀ-ú&.-]*|S\.?\/?A\.?|do|da|de|dos)){0,4})/);
+    if (m) { termos.instituicao = m[1].replace(/\s+(do|da|de|dos)$/i, '').trim(); guardar('instituicao', m); }
+  }
 
   for (const [re, tipo] of [[/consignad[oa]/i, 'consignado'], [/ve[íi]culo|autom[óo]vel/i, 'veiculo'], [/im[óo]vel|habitacional/i, 'imovel']] as const) {
     m = achar(re);
@@ -119,10 +146,14 @@ export function analisarTextoContrato(textoOriginal: string): ResultadoLeitura {
   if (m) { termos.jurosMora = numero(m[1]); termos.periodoMora = periodo(m[2]) ?? 'mes'; guardar('jurosMora', m); }
 
   m = achar(new RegExp(`(?:(?:data\\s+(?:do\\s+|de\\s+)?)?primeir[oa]\\s+(?:vencimento|parcela|presta[çc][ãa]o)|vencimento\\s+da\\s+(?:1[ªa°º]|primeira)\\s+(?:parcela|presta[çc][ãa]o)|1[ªa°º]\\s+(?:parcela|presta[çc][ãa]o|vencimento))[^\\d]{0,40}?${DATA}`, 'i'));
-  if (m) { termos.dataPrimeiraParcela = lerData(m[1]) ?? undefined; guardar('dataPrimeiraParcela', m); }
+  if (m) { termos.dataPrimeiraParcela = lerQualquerData(m[1]) ?? undefined; guardar('dataPrimeiraParcela', m); }
 
-  m = achar(new RegExp(`data\\s+(?:de\\s+|da\\s+)?(?:emiss[ãa]o|contrata[çc][ãa]o|assinatura|celebra[çc][ãa]o|libera[çc][ãa]o)[^\\d]{0,20}?${DATA}`, 'i'));
-  if (m) { termos.dataContratacao = lerData(m[1]) ?? undefined; guardar('dataContratacao', m); }
+  // Data da contratação: "Data de emissão: 10/03/2025", "contratado em 10/03/2025", "São Paulo, 10 de março de 2025" (local e data)
+  m = achar(new RegExp(`data\\s+(?:de\\s+|da\\s+|do\\s+)?(?:emiss[ãa]o|contrata[çc][ãa]o|assinatura|celebra[çc][ãa]o|libera[çc][ãa]o|contrato|opera[çc][ãa]o)[^\\d]{0,20}?${DATA}`, 'i'))
+    ?? achar(new RegExp(`(?:contratad[oa]|firmad[oa]|assinad[oa]|celebrad[oa]|emitid[oa]|formalizad[oa])\\s+em\\s*:?\\s*${DATA}`, 'i'))
+    ?? achar(new RegExp(`local\\s+e\\s+data\\s*:?[^\\d]{0,40}?${DATA}`, 'i'))
+    ?? achar(new RegExp(`\\b[A-ZÀ-Ú][a-zà-ú]+(?:\\s+[A-ZÀ-Ú]?[a-zà-ú]+){0,3}\\s*(?:\\/\\s*[A-Z]{2})?\\s*,\\s*(\\d{1,2}(?:º|°)?\\s+de\\s+[A-Za-zÀ-ú]+\\s+de\\s+\\d{4})`));
+  if (m) { termos.dataContratacao = lerQualquerData(m[1]) ?? undefined; guardar('dataContratacao', m); }
 
   // Remove o que não foi possível interpretar
   for (const k of Object.keys(termos) as (keyof TermosLidos)[]) if (termos[k] === undefined || Number.isNaN(termos[k])) delete termos[k];

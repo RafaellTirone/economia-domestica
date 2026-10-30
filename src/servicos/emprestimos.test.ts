@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Emprestimo, PagamentoParcela } from '../tipos';
-import { resumirEmprestimo, validarEmprestimo, type DadosEmprestimo } from './emprestimos';
+import { estimarParcelasPagas, primeiraParcelaPelaContratacao, resumirEmprestimo, validarEmprestimo, type DadosEmprestimo } from './emprestimos';
 
 // Exemplo dos layouts: R$ 1.000,00 em 10x de R$ 105,58, juros de 1% ao mês, 1ª parcela em 25/06/2026.
 const reforma: Emprestimo = {
@@ -75,5 +75,34 @@ describe('validação do cadastro', () => {
   it('exige nome, valores e data', () => {
     const e = validarEmprestimo({ ...base, nome: ' ', valorEmprestado: 0, valorParcela: 0, numeroParcelas: 0, dataPrimeiraParcela: '' });
     expect(Object.keys(e).sort()).toEqual(['dataPrimeiraParcela', 'nome', 'numeroParcelas', 'valorEmprestado', 'valorParcela']);
+  });
+});
+
+describe('consignado: parcelas descontadas do salário', () => {
+  const consignado: Emprestimo = { ...reforma, id: 2, tipo: 'consignado', descontoEmFolha: true, numeroParcelas: 36, valorEmprestado: 10000_00, valorParcela: 385_43, taxaJuros: 1.89, dataPrimeiraParcela: '2025-04-10' };
+  const salarioDia5 = { tipo: 'dia', dia: 5 } as const;
+  it('conta as parcelas pelos salários recebidos (abr/2025 até 30/10/2026 = 19)', () => {
+    expect(estimarParcelasPagas(consignado, salarioDia5, '2026-10-30')).toBe(19);
+    expect(estimarParcelasPagas(consignado, salarioDia5, '2026-11-04')).toBe(19);
+    expect(estimarParcelasPagas(consignado, salarioDia5, '2026-11-05')).toBe(20); // salário de novembro caiu
+  });
+  it('a situação avança sozinha a cada salário, sem atraso', () => {
+    const r = resumirEmprestimo(consignado, [], '2026-10-30', salarioDia5);
+    expect(r.pagas).toBe(19);
+    expect(r.atrasadas).toHaveLength(0);
+    expect(r.proxima!.vencimento).toBe('2026-11-05');
+    expect(r.mensagem.texto).toContain('Descontado direto do salário');
+    expect(r.sequenciaEmDia).toBe(19);
+  });
+  it('sem o dia do salário cadastrado, usa as datas do contrato', () => {
+    const r = resumirEmprestimo(consignado, [], '2026-10-30', null);
+    expect(r.parcelas[0].vencimento).toBe('2025-04-10');
+  });
+  it('outros empréstimos: estima pelas parcelas já vencidas', () => {
+    expect(estimarParcelasPagas(reforma, null, '2026-10-29')).toBe(5);
+  });
+  it('contrato só com a data de contratação: estima a 1ª parcela', () => {
+    expect(primeiraParcelaPelaContratacao('2025-03-10', true, salarioDia5)).toBe('2025-04-04'); // 5/4/2025 é sábado → sexta
+    expect(primeiraParcelaPelaContratacao('2025-03-10', false, null)).toBe('2025-04-10');
   });
 });

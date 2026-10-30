@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { conferirContrato, type DadosConferencia } from './conferenciaContrato';
 
-const todos = ['valorEmprestado', 'numeroParcelas', 'valorParcela', 'taxaJuros', 'multaAtraso', 'jurosMora', 'dataPrimeiraParcela', 'numeroContrato', 'instituicao', 'cetAnual'];
+const todos = ['dataContratacao', 'valorEmprestado', 'numeroParcelas', 'valorParcela', 'taxaJuros', 'multaAtraso', 'jurosMora', 'dataPrimeiraParcela', 'numeroContrato', 'instituicao', 'cetAnual'];
 const base: DadosConferencia = {
   lidos: todos, valorEmprestado: 10000_00, numeroParcelas: 36, valorParcela: 385_43, taxaJuros: 1.89, periodoTaxa: 'mes', cetAnual: 27.58,
-  multaAtraso: 2, jurosMora: 1, periodoMora: 'mes', dataPrimeiraParcela: '2025-04-10', instituicao: 'Banco Horizonte S.A.', numeroContrato: '123456789-0',
+  multaAtraso: 2, jurosMora: 1, periodoMora: 'mes', dataPrimeiraParcela: '2025-04-10', instituicao: 'Banco Horizonte S.A.', numeroContrato: '123456789-0', dataContratacao: '2025-03-10',
 };
 
 describe('conferência automática do contrato', () => {
@@ -12,7 +12,7 @@ describe('conferência automática do contrato', () => {
     const r = conferirContrato(base);
     expect(r.tudoCerto).toBe(true);
     expect(r.itens.every((i) => i.situacao === 'ok')).toBe(true);
-    expect(r.itens.map((i) => i.id)).toEqual(['valorEmprestado', 'numeroParcelas', 'valorParcela', 'taxa', 'parcelas-batem', 'multa', 'mora', 'datas', 'identificacao', 'cet']);
+    expect(r.itens.map((i) => i.id)).toEqual(['valorEmprestado', 'numeroParcelas', 'valorParcela', 'taxa', 'parcelas-batem', 'multa', 'mora', 'datas', 'contratacao', 'identificacao', 'cet']);
     // cada item mostra o valor que o app leu
     const v = Object.fromEntries(r.itens.map((i) => [i.rotulo, i.valor.replace(/\u00a0/g, ' ')]));
     expect(v['Valor do empréstimo']).toBe('R$ 10.000,00');

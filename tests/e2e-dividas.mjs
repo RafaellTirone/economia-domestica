@@ -48,6 +48,15 @@ writeFileSync(CONTRATO, gerarPdf([
   'incidirão multa moratória de 2% (dois por cento) sobre o valor em atraso e juros de',
   'mora de 1% (um por cento) ao mês, calculados pro rata die.',
 ]));
+const OUTRO_MODELO = join(PASTA, 'contrato-outro-modelo.pdf');
+writeFileSync(OUTRO_MODELO, gerarPdf([
+  'CONTRATO DE EMPRÉSTIMO CONSIGNADO EM FOLHA DE PAGAMENTO',
+  'CREDOR: Paraná Banco S.A., CNPJ 14.388.334/0001-99, com sede em Curitiba/PR.',
+  'Nº do contrato: 778899-1',
+  'Valor liberado de R$ 5.000,00, a ser pago em 24 parcelas mensais de R$ 268,40.',
+  'Juros remuneratórios de 1,80% ao mês. Multa de 2% e juros de mora de 1% ao mês.',
+  'E por estarem de acordo, assinam. Curitiba, 5 de fevereiro de 2026.',
+]));
 const ESCANEADO = join(PASTA, 'contrato-escaneado.pdf');
 writeFileSync(ESCANEADO, gerarPdf([]));
 
@@ -110,7 +119,9 @@ item = await itemDaLista('Taxa de juros');
 confere('Lista: Taxa de juros ✓ 1,89% ao mês', item.situacao === 'ok' && item.texto.includes('1,89% ao mês'));
 item = await itemDaLista('Multa por atraso');
 confere('Lista: Multa ✓ 2% dentro do limite do CDC', item.situacao === 'ok' && item.texto.includes('dentro do limite'));
-confere('Lista: os 10 itens conferem', (await page.getByTestId('lista-conferencia').locator('li[data-situacao="ok"]').count()) === 10);
+confere('Lista: os 11 itens conferem (inclui a data da contratação)', (await page.getByTestId('lista-conferencia').locator('li[data-situacao="ok"]').count()) === 11);
+item = await itemDaLista('Data da contratação');
+confere('Lista: Data da contratação ✓ 10/03/2025', item.situacao === 'ok' && item.texto.includes('10/03/2025'));
 confere('Caixa "Conferido" vem marcada automaticamente', await page.locator('#campo-conferido').isChecked() && await page.getByText('Conferido automaticamente pela análise do app.').isVisible());
 // Se a parcela não bater com a taxa, o app aponta e desmarca sozinho
 await page.locator('#campo-valorParcela').fill('400,00');
@@ -127,11 +138,17 @@ confere('Corrigindo a parcela, volta a marcar sozinho', await page.locator('#cam
 await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
 confere('Exige um nome para o empréstimo', await page.getByText(/Dê um nome/).isVisible());
 await page.locator('#campo-nome').fill('Consignado do carro');
-// 1ª parcela em 10/04/2025: até hoje já venceram as parcelas até o mês passado/este mês
-const venc = (k) => { const d = new Date(2025, 3 + k - 1, 10); return d; };
+// Consignado: desconto no salário. Salário todo dia 10 → o app conta os salários recebidos desde abr/2025
+confere('Consignado: "descontado do salário" vem marcado', await page.locator('#campo-descontoEmFolha').isChecked());
+await page.locator('#campo-salario-tipo').selectOption('dia');
+await page.locator('#campo-salario-dia').selectOption('10');
+const pagamentoSalario = (ano, mes) => { const d = new Date(ano, mes, 10); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1); return d; };
+const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
 let jaVencidas = 0;
-for (let k = 1; k <= 36; k++) if (venc(k) < new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())) jaVencidas = k;
-await page.locator('#campo-parcelasJaPagas').fill(String(jaVencidas));
+for (let k = 0; k < 36; k++) if (pagamentoSalario(2025, 3 + k) <= hojeSemHora) jaVencidas = k + 1;
+const calculadas = nb(await page.getByTestId('parcelas-calculadas').innerText());
+confere(`Consignado: app calcula ${jaVencidas} parcelas já descontadas pelos salários recebidos`, calculadas.startsWith(`${jaVencidas} parcelas já descontadas`) && calculadas.includes('todo dia 10') && calculadas.includes('desde a contratação em 10/03/2025'), calculadas);
+await page.screenshot({ path: join(CAPTURAS, 'divida-consignado-salario.png'), fullPage: true });
 await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
 await page.getByRole('heading', { name: 'Consignado do carro' }).waitFor();
 confere('Salvou e abriu a página do contrato', nb(await aviso().innerText()).includes('“Consignado do carro” cadastrado.'));
@@ -144,7 +161,8 @@ confere('Juros: R$ 3.875,48 no contrato todo (38,8% a mais)', juros.includes('R$
 confere('Juros: 1,89% ao mês = 0,062% ao dia = 25,19% ao ano (do contrato)', juros.includes('1,89% ao mês') && juros.includes('0,062% ao dia') && juros.includes('25,19% ao ano') && juros.includes('(do contrato)'));
 confere('Juros: CET 27,58% ao ano', juros.includes('27,58% ao ano'));
 confere(`Situação: ${jaVencidas} de 36 pagas`, (await page.getByText(`${jaVencidas} de 36`, { exact: true }).count()) === 1);
-confere('Mensagem de parabéns por pagar em dia', await page.getByTestId('mensagem-parabens').isVisible() || await page.getByTestId('mensagem-lembrete').isVisible());
+confere('Mensagem: descontado direto do salário, com o próximo desconto', (await page.getByTestId('mensagem-parabens').innerText()).includes('Descontado direto do salário'));
+confere('Consignado não pede para registrar pagamento (é automático)', await page.getByTestId('info-desconto-folha').isVisible() && (await page.getByRole('button', { name: /Registrar pagamento/ }).count()) === 0);
 confere('Contrato guardado pode ser aberto', await page.getByRole('link', { name: 'Abrir contrato' }).isVisible());
 confere('Página do contrato mostra "Conferido automaticamente pela análise do app" e a lista', (await page.getByTestId('situacao-conferencia').innerText()).includes('Conferido automaticamente pela análise do app') && await page.getByTestId('lista-conferencia').isVisible());
 await page.getByText('Ver de onde vieram os termos').click();
@@ -152,17 +170,10 @@ confere('Mostra de onde vieram os termos (trechos do contrato)', await page.getB
 await page.screenshot({ path: join(CAPTURAS, 'divida-detalhe.png'), fullPage: true });
 await verificarTela(page, 'Detalhe da dívida · celular');
 
-// 4. Registrar pagamento (em dia) e desfazer
-const proxima = jaVencidas + 1;
-await page.getByRole('button', { name: `Registrar pagamento da parcela ${proxima}` }).click();
-await aviso().filter({ hasText: `Parcela ${proxima}` }).waitFor({ timeout: 5000 }).catch(() => {});
-const msgPag = nb(await aviso().innerText());
-confere('Pagamento em dia recebe parabéns', msgPag.includes(`Parcela ${proxima} paga em dia. Parabéns!`), msgPag);
-await page.getByText(`${proxima} de 36`, { exact: true }).waitFor({ timeout: 5000 }).catch(() => {});
-confere('Contador de pagas sobe', (await page.getByText(`${proxima} de 36`, { exact: true }).count()) === 1);
-await page.goto(`${URL_APP}/lancamentos`);
-const lista = nb(await page.getByTestId('lista-lancamentos').innerText());
-confere('Pagamento vira despesa em Lançamentos (Dívidas › Parcela de empréstimo)', lista.includes(`Consignado do carro — parcela ${proxima} de 36`) && lista.includes('Dívidas › Parcela de empréstimo'));
+// 4. O dia do salário ficou salvo em Configurações
+await page.goto(`${URL_APP}/configuracoes`);
+await page.getByTestId('config-salario-exemplo').filter({ hasText: 'todo dia 10' }).waitFor({ timeout: 5000 }).catch(() => {});
+confere('Configurações mostram o dia do salário cadastrado', (await page.getByTestId('config-salario-exemplo').innerText()).includes('todo dia 10'));
 await page.goBack();
 await page.getByRole('heading', { name: 'Consignado do carro' }).waitFor();
 
@@ -179,6 +190,7 @@ await page.locator('#campo-numeroParcelas').fill('10');
 await page.locator('#campo-valorParcela').fill('105,58');
 await page.locator('#campo-dataPrimeiraParcela').fill(iso(primeira));
 confere('Sem taxa informada, o app calcula pelas parcelas (1,00% ao mês)', nb(await page.getByTestId('conferencia-taxa').innerText()).includes('1,00% ao mês'));
+confere('Outros empréstimos: app calcula as parcelas já vencidas (5)', (await page.locator('#campo-parcelasJaPagas').inputValue()) === '5');
 await page.locator('#campo-parcelasJaPagas').fill('4');
 await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
 await page.getByRole('heading', { name: 'Empréstimo da reforma' }).waitFor();
@@ -191,6 +203,34 @@ confere('Juros calculados pelas parcelas quando o contrato não informa', nb(awa
 confere('Valor sugerido do pagamento já inclui multa e juros', (await page.locator('#campo-valor-pago').inputValue()) === fmt(esperado).replace('R$ ', ''));
 await page.screenshot({ path: join(CAPTURAS, 'divida-atrasada.png'), fullPage: true });
 await verificarTela(page, 'Dívida atrasada · celular');
+
+// Registrar pagamento da parcela atrasada, conferir em Lançamentos e desfazer
+await page.getByRole('button', { name: 'Registrar pagamento da parcela 5' }).click();
+await aviso().filter({ hasText: 'Parcela 5' }).waitFor({ timeout: 5000 }).catch(() => {});
+confere('Pagamento com atraso é registrado', nb(await aviso().innerText()).includes('Parcela 5 registrada'));
+await aviso().getByRole('button', { name: 'Desfazer' }).click();
+await page.getByTestId('atraso-5').waitFor();
+confere('"Desfazer" o pagamento volta a parcela para atrasada', true);
+// Pagar a parcela 6 antes do vencimento: parabéns
+await page.locator('#campo-parcela').selectOption('6');
+await page.getByRole('button', { name: 'Registrar pagamento da parcela 6' }).click();
+await aviso().filter({ hasText: 'Parcela 6' }).waitFor({ timeout: 5000 }).catch(() => {});
+confere('Pagamento em dia recebe parabéns', nb(await aviso().innerText()).includes('Parcela 6 paga em dia. Parabéns!'));
+await page.goto(`${URL_APP}/lancamentos`);
+const lista = nb(await page.getByTestId('lista-lancamentos').innerText());
+confere('Pagamento vira despesa em Lançamentos (Dívidas › Parcela de empréstimo)', lista.includes('Empréstimo da reforma — parcela 6 de 10') && lista.includes('Dívidas › Parcela de empréstimo'));
+await page.goBack();
+await page.getByRole('heading', { name: 'Empréstimo da reforma' }).waitFor();
+
+// 5b. Contrato escrito de outro jeito: CREDOR:, Nº do contrato:, data por extenso e sem a 1ª parcela
+await page.goto(`${URL_APP}/dividas/novo`);
+await page.locator('#campo-contrato').setInputFiles(OUTRO_MODELO);
+await page.getByTestId('resultado-leitura').filter({ hasText: /encontrei/ }).waitFor({ timeout: 30000 });
+confere('Outro modelo: banco lido pelo rótulo "CREDOR:"', (await valorDe('instituicao')) === 'Paraná Banco S.A.');
+confere('Outro modelo: número lido de "Nº do contrato:"', (await valorDe('numeroContrato')) === '778899-1');
+confere('Outro modelo: data da contratação por extenso (5 de fevereiro de 2026)', (await valorDe('dataContratacao')) === '05/02/2026');
+confere('Outro modelo: sem 1ª parcela no contrato, o app estima pela contratação e avisa', (await page.getByTestId('campo-dataPrimeiraParcela-texto').innerText()) !== '' && await page.getByText(/Estimada pela data da contratação/).isVisible());
+await page.screenshot({ path: join(CAPTURAS, 'divida-outro-modelo.png'), fullPage: true });
 
 // 6. Lista: atrasada aparece primeiro, com resumo
 await page.locator('nav.fixed').getByRole('link', { name: 'Dívidas' }).click();

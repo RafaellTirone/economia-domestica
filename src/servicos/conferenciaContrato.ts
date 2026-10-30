@@ -45,6 +45,7 @@ export interface DadosConferencia {
   dataPrimeiraParcela: DataISO;
   instituicao: string;
   numeroContrato: string;
+  dataContratacao?: DataISO | null;
   /** Valores como o app leu no contrato (já formatados), para avisar se a pessoa alterou algum. */
   originais?: Partial<Record<string, string>>;
 }
@@ -108,6 +109,10 @@ export function conferirContrato(d: DadosConferencia): ResultadoConferencia {
   // 6. Datas
   item('Vencimento da 1ª parcela', formatarData(d.dataPrimeiraParcela));
   add('datas', lidos.has('dataPrimeiraParcela'), false, 'Encontrado no contrato.', 'Não encontrado no contrato — confira a data.');
+
+  // 6b. Data da contratação
+  item('Data da contratação', d.dataContratacao ? formatarData(d.dataContratacao) : '—');
+  add('contratacao', !!d.dataContratacao && lidos.has('dataContratacao'), false, 'Encontrada no contrato.', 'Não encontrada no contrato.');
 
   // 7. Identificação
   item('Banco e nº do contrato', [d.instituicao, d.numeroContrato && `nº ${d.numeroContrato}`].filter(Boolean).join(' · ') || '—');

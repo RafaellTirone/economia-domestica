@@ -1,6 +1,6 @@
 import { banco } from '../db/banco';
 import type { Centavos, DataISO, Emprestimo, PagamentoParcela } from '../tipos';
-import { adicionarMeses, diferencaEmDias, formatarData, formatarDiaMes, hojeISO, partesDaData, proximoDiaUtil } from '../utils/datas';
+import { adicionarMeses, diaDoSalario, diferencaEmDias, formatarData, formatarDiaMes, hojeISO, partesDaData, proximoDiaUtil, type RegraSalario } from '../utils/datas';
 import { formatarMoeda, formatarPercentual } from '../utils/moeda';
 import { converterTaxa, encargosDeAtraso, saldoDevedor, tabelaDeParcelas, taxaImplicita, type Encargos } from './juros';
 
@@ -17,6 +17,8 @@ export interface SituacaoParcela {
   juros: Centavos | null;
   amortizacao: Centavos | null;
   pagamento?: PagamentoParcela;
+  /** Consignado: descontada automaticamente do salário. */
+  descontadaDoSalario?: boolean;
   status: 'paga' | 'atrasada' | 'vence-hoje' | 'a-vencer';
   /** Só para parcelas atrasadas. */
   encargos?: Encargos;
@@ -49,7 +51,52 @@ export interface ResumoEmprestimo {
   mensagem: Mensagem;
 }
 
-export function resumirEmprestimo(e: Emprestimo, pagamentos: PagamentoParcela[], hoje: DataISO = hojeISO()): ResumoEmprestimo {
+/**
+ * Para consignado com desconto em folha: a parcela é descontada no dia do salário do mês do vencimento.
+ * Devolve null se não for desconto em folha ou se o dia do salário não foi cadastrado.
+ */
+export function dataDoDesconto(e: Pick<Emprestimo, 'descontoEmFolha'>, vencimento: DataISO, regra: RegraSalario | null | undefined): DataISO | null {
+  if (!e.descontoEmFolha || !regra) return null;
+  const { ano, mes } = partesDaData(vencimento);
+  return diaDoSalario(ano, mes, regra);
+}
+
+/**
+ * Quantas parcelas já foram pagas até hoje (estimativa para o cadastro):
+ * - consignado com desconto em folha: quantos salários já caíram desde o 1º desconto;
+ * - outros: quantas parcelas já venceram (supondo que foram pagas em dia).
+ */
+export function estimarParcelasPagas(
+  d: { dataPrimeiraParcela: DataISO; numeroParcelas: number; descontoEmFolha?: boolean },
+  regra: RegraSalario | null | undefined,
+  hoje: DataISO = hojeISO(),
+): number {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d.dataPrimeiraParcela) || !(d.numeroParcelas > 0)) return 0;
+  const dia = partesDaData(d.dataPrimeiraParcela).dia;
+  let pagas = 0;
+  for (let k = 0; k < d.numeroParcelas; k++) {
+    const venc = adicionarMeses(d.dataPrimeiraParcela, k, dia);
+    const quando = dataDoDesconto(d, venc, regra) ?? proximoDiaUtil(venc);
+    if (d.descontoEmFolha && regra ? quando <= hoje : quando < hoje) pagas++;
+    else break;
+  }
+  return pagas;
+}
+
+/**
+ * Quando o contrato só tem a data da contratação: estima a 1ª parcela.
+ * Consignado → salário do mês seguinte; outros → um mês depois da contratação.
+ */
+export function primeiraParcelaPelaContratacao(dataContratacao: DataISO, descontoEmFolha: boolean, regra: RegraSalario | null | undefined): DataISO {
+  const mesSeguinte = adicionarMeses(dataContratacao, 1);
+  if (descontoEmFolha && regra) {
+    const { ano, mes } = partesDaData(mesSeguinte);
+    return diaDoSalario(ano, mes, regra);
+  }
+  return mesSeguinte;
+}
+
+export function resumirEmprestimo(e: Emprestimo, pagamentos: PagamentoParcela[], hoje: DataISO = hojeISO(), regraSalario?: RegraSalario | null): ResumoEmprestimo {
   const taxaInformadaMes = e.taxaJuros !== null ? converterTaxa(e.taxaJuros, e.periodoTaxa, 'mes') : null;
   const implicita = taxaImplicita(e.valorEmprestado, e.valorParcela, e.numeroParcelas);
   const taxaMensal = taxaInformadaMes ?? implicita;
@@ -61,21 +108,30 @@ export function resumirEmprestimo(e: Emprestimo, pagamentos: PagamentoParcela[],
   const dia = partesDaData(e.dataPrimeiraParcela).dia;
   const parcelas: SituacaoParcela[] = Array.from({ length: e.numeroParcelas }, (_, k) => {
     const numero = k + 1;
-    const vencimento = adicionarMeses(e.dataPrimeiraParcela, k, dia);
-    const vencimentoUtil = proximoDiaUtil(vencimento);
+    const vencContrato = adicionarMeses(e.dataPrimeiraParcela, k, dia);
+    // Consignado em folha: a data que vale é o dia do salário (o desconto é automático)
+    const desconto = dataDoDesconto(e, vencContrato, regraSalario);
+    const vencimento = desconto ?? vencContrato;
+    const vencimentoUtil = desconto ?? proximoDiaUtil(vencimento);
     const linha = tabela?.[k];
     // No SAC a parcela muda todo mês; na Price vale o valor do contrato.
     const valor = e.sistema === 'sac' && linha ? linha.parcela : e.valorParcela;
-    const pagamento = porNumero.get(numero);
+    let pagamento = porNumero.get(numero);
+    let descontadaDoSalario = false;
+    if (!pagamento && desconto && desconto <= hoje) {
+      pagamento = { emprestimoId: e.id ?? 0, numeroParcela: numero, dataPagamento: desconto, valorPago: valor, lancamentoId: null };
+      descontadaDoSalario = true;
+    }
     let status: SituacaoParcela['status'] = 'a-vencer';
     let encargos: Encargos | undefined;
     if (pagamento) status = 'paga';
+    else if (desconto) status = hoje >= desconto ? 'vence-hoje' : 'a-vencer'; // descontado do salário: não atrasa
     else if (hoje > vencimentoUtil) {
       status = 'atrasada';
       // Atraso conta desde o vencimento do contrato
       encargos = encargosDeAtraso(valor, diferencaEmDias(vencimento, hoje), e.multaAtraso, e.jurosMora, e.periodoMora);
     } else if (hoje >= vencimento) status = 'vence-hoje';
-    return { numero, vencimento, vencimentoUtil, valor, juros: linha?.juros ?? null, amortizacao: linha?.amortizacao ?? null, pagamento, status, encargos };
+    return { numero, vencimento, vencimentoUtil, valor, juros: linha?.juros ?? null, amortizacao: linha?.amortizacao ?? null, pagamento, descontadaDoSalario, status, encargos };
   });
 
   const pagas = parcelas.filter((p) => p.status === 'paga').length;
@@ -95,7 +151,7 @@ export function resumirEmprestimo(e: Emprestimo, pagamentos: PagamentoParcela[],
   let sequenciaEmDia = 0;
   for (const p of [...parcelas].reverse()) {
     if (p.status !== 'paga') { if (sequenciaEmDia > 0) break; continue; }
-    if (p.pagamento!.dataPagamento <= p.vencimentoUtil) sequenciaEmDia++; else break;
+    if (p.descontadaDoSalario || p.pagamento!.dataPagamento <= p.vencimentoUtil) sequenciaEmDia++; else break;
   }
 
   const totalPago = tabela ? tabela.reduce((s, l) => s + l.parcela, 0) : e.valorParcela * e.numeroParcelas;
@@ -108,7 +164,9 @@ export function resumirEmprestimo(e: Emprestimo, pagamentos: PagamentoParcela[],
     percentualQuitado, proxima, atrasadas, saldoDevedor: saldo, economiaQuitandoHoje: Math.max(0, totalRestante - saldo),
     parcelaSemJuros: Math.round(e.valorEmprestado / e.numeroParcelas),
     jurosPorParcelaMedio: Math.round(jurosTotal / e.numeroParcelas), jurosTotalContrato: jurosTotal, sequenciaEmDia, status,
-    mensagem: mensagemDoContrato({ status, atrasadas, proxima, sequenciaEmDia, percentualQuitado, faltam }, hoje),
+    mensagem: e.descontoEmFolha && regraSalario && status !== 'quitado'
+      ? { tipo: 'parabens', texto: `Descontado direto do salário: ${pagas} de ${e.numeroParcelas} parcelas já pagas (${formatarPercentual(percentualQuitado, 0)} quitado).${proxima ? ` Próximo desconto: ${formatarData(proxima.vencimento)}, ${formatarMoeda(proxima.valor)}.` : ''}` }
+      : mensagemDoContrato({ status, atrasadas, proxima, sequenciaEmDia, percentualQuitado, faltam }, hoje),
   };
 }
 
@@ -167,7 +225,9 @@ export async function criarEmprestimo(d: DadosEmprestimo, contratoArquivoId: num
   return banco.transaction('rw', banco.emprestimos, banco.pagamentosParcela, async () => {
     const id = await banco.emprestimos.add({ ...dados, contratoArquivoId, criadoEm: new Date().toISOString() });
     const dia = partesDaData(d.dataPrimeiraParcela).dia;
-    await banco.pagamentosParcela.bulkAdd(Array.from({ length: parcelasJaPagas }, (_, k) => ({
+    // Consignado em folha: as parcelas pagas vêm dos salários recebidos (não precisa gravar)
+    const historico = d.descontoEmFolha ? 0 : parcelasJaPagas;
+    await banco.pagamentosParcela.bulkAdd(Array.from({ length: historico }, (_, k) => ({
       emprestimoId: id, numeroParcela: k + 1, dataPagamento: adicionarMeses(d.dataPrimeiraParcela, k, dia), valorPago: d.valorParcela, lancamentoId: null,
     })));
     return id;

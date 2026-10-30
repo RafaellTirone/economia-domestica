@@ -7,9 +7,10 @@ import { ListaConferencia } from '../componentes/ui/ListaConferencia';
 import { useAvisos } from '../hooks/useAvisos';
 import { useEmprestimo } from '../hooks/useDados';
 import { conferirContrato } from '../servicos/conferenciaContrato';
+import { useRegraSalario } from '../servicos/configuracoes';
 import { desfazerPagamento, excluirEmprestimo, registrarPagamento, resumirEmprestimo } from '../servicos/emprestimos';
 import { converterTaxa, encargosDeAtraso, formatarTaxa, NOME_PERIODO } from '../servicos/juros';
-import { diferencaEmDias, formatarData, hojeISO } from '../utils/datas';
+import { descreverRegraSalario, diferencaEmDias, formatarData, hojeISO } from '../utils/datas';
 import { formatarMoeda, formatarPercentual, lerValor } from '../utils/moeda';
 
 // Página de um contrato: situação, juros que está pagando, custo do atraso conforme o contrato,
@@ -24,7 +25,9 @@ export function EmprestimoDetalhe() {
   const navigate = useNavigate();
   const { avisar } = useAvisos();
   const hoje = hojeISO();
-  const r = useMemo(() => (dados ? resumirEmprestimo(dados.emprestimo, dados.pagamentos, hoje) : null), [dados, hoje]);
+  const regraSalario = useRegraSalario();
+  const r = useMemo(() => (dados && regraSalario !== undefined ? resumirEmprestimo(dados.emprestimo, dados.pagamentos, hoje, regraSalario) : null), [dados, hoje, regraSalario]);
+  const emFolha = !!dados?.emprestimo.descontoEmFolha && !!regraSalario;
 
   // Registro de pagamento
   const [parcelaEscolhida, setParcelaEscolhida] = useState<number | null>(null);
@@ -132,7 +135,15 @@ export function EmprestimoDetalhe() {
       })}
 
       {/* Registrar pagamento */}
-      {r.status !== 'quitado' && parcelaAtual && (
+      {emFolha && r.status !== 'quitado' && (
+        <Bloco titulo="Desconto no salário">
+          <p className="m-0 text-sm" data-testid="info-desconto-folha">As parcelas são descontadas direto do seu salário ({descreverRegraSalario(regraSalario!)}). O app marca cada uma como paga no dia do salário — não precisa registrar.</p>
+          {r.proxima && <p className="m-0 text-sm">Próximo desconto: <strong>{formatarData(r.proxima.vencimento)}</strong> · {formatarMoeda(r.proxima.valor)}.</p>}
+          <p className="m-0 text-xs text-suave">Dia do salário errado? Corrija em Configurações.</p>
+        </Bloco>
+      )}
+
+      {!emFolha && r.status !== 'quitado' && parcelaAtual && (
         <Bloco titulo="Registrar pagamento">
           <form onSubmit={pagar} noValidate className="flex flex-col gap-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -229,7 +240,7 @@ export function EmprestimoDetalhe() {
                   <td className="p-2 text-right">{p.juros === null ? '—' : formatarMoeda(p.juros)}</td>
                   <td className="p-2 text-right">{p.amortizacao === null ? '—' : formatarMoeda(p.amortizacao)}</td>
                   <td className={`p-2 font-bold ${p.status === 'atrasada' ? 'text-perigo-texto' : p.status === 'paga' ? 'text-ok-texto' : p.status === 'vence-hoje' ? 'text-alerta-texto' : 'text-suave'}`}>
-                    {p.status === 'paga' ? `Paga ${formatarData(p.pagamento!.dataPagamento)}` : p.status === 'atrasada' ? `Atrasada ${p.encargos!.diasAtraso}d` : p.status === 'vence-hoje' ? 'Vence agora' : 'A vencer'}
+                    {p.status === 'paga' ? `${p.descontadaDoSalario ? 'Descontada' : 'Paga'} ${formatarData(p.pagamento!.dataPagamento)}` : p.status === 'atrasada' ? `Atrasada ${p.encargos!.diasAtraso}d` : p.status === 'vence-hoje' ? 'Vence agora' : 'A vencer'}
                   </td>
                 </tr>
               ))}

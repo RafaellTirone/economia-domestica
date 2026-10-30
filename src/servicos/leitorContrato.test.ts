@@ -48,3 +48,28 @@ describe('leitor de contrato', () => {
     expect(analisarTextoContrato('Lista de compras: arroz, feijão.').encontrados).toBe(0);
   });
 });
+
+describe('leitor de contrato — outras formas de escrever banco, número e data', () => {
+  it('rótulo "CREDOR:" e "Nº do contrato:"', () => {
+    const t = analisarTextoContrato('CREDOR: Paraná Banco S.A., CNPJ 14.388.334/0001-99. Nº do contrato: 778899-1. Contratado em 05/02/2026.').termos;
+    expect(t.instituicao).toBe('Paraná Banco S.A.');
+    expect(t.numeroContrato).toBe('778899-1');
+    expect(t.dataContratacao).toBe('2026-02-05');
+  });
+  it('"Instituição financeira:" e "Contrato: 2025/000123"', () => {
+    const t = analisarTextoContrato('Instituição Financeira: Banco Daycoval S.A. - CNPJ 62.232.889/0001-90. Contrato: 2025/000123').termos;
+    expect(t.instituicao).toBe('Banco Daycoval S.A.');
+    expect(t.numeroContrato).toBe('2025/000123');
+  });
+  it('reconhece banco conhecido pelo nome', () => {
+    expect(analisarTextoContrato('Empréstimo consignado contratado junto ao Itaú Consignado para pagamento em folha.').termos.instituicao).toBe('Itaú Consignado');
+    expect(analisarTextoContrato('Operação realizada pela Caixa Econômica Federal.').termos.instituicao).toBe('Caixa Econômica Federal');
+  });
+  it('data por extenso no fim do contrato (local e data)', () => {
+    expect(analisarTextoContrato('E por estarem justos e contratados, assinam. Belo Horizonte, 10 de março de 2025.').termos.dataContratacao).toBe('2025-03-10');
+    expect(analisarTextoContrato('Local e data: Curitiba/PR, 22/08/2024').termos.dataContratacao).toBe('2024-08-22');
+  });
+  it('1ª parcela por extenso', () => {
+    expect(analisarTextoContrato('Vencimento da primeira parcela: 10 de abril de 2025').termos.dataPrimeiraParcela).toBe('2025-04-10');
+  });
+});

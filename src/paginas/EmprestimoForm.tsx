@@ -2,16 +2,18 @@ import { ArrowLeft, FileCheck2, FileText, FileWarning, Loader2, Upload, X } from
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { CampoData } from '../componentes/ui/CampoData';
+import { EditorSalario } from '../componentes/ui/EditorSalario';
 import { ListaConferencia } from '../componentes/ui/ListaConferencia';
 import { useAvisos } from '../hooks/useAvisos';
 import { useEmprestimo } from '../hooks/useDados';
 import { conferirContrato } from '../servicos/conferenciaContrato';
-import { atualizarEmprestimo, criarEmprestimo, guardarArquivo, validarEmprestimo, type DadosEmprestimo } from '../servicos/emprestimos';
+import { salvarRegraSalario, useRegraSalario } from '../servicos/configuracoes';
+import { atualizarEmprestimo, criarEmprestimo, estimarParcelasPagas, guardarArquivo, primeiraParcelaPelaContratacao, validarEmprestimo, type DadosEmprestimo } from '../servicos/emprestimos';
 import { converterTaxa, formatarTaxa, NOME_PERIODO, taxaImplicita } from '../servicos/juros';
 import { formatarMoeda } from '../utils/moeda';
 import { analisarTextoContrato, extrairTextoDoPdf, type TermosLidos } from '../servicos/leitorContrato';
 import type { PeriodoTaxa, TipoEmprestimo } from '../tipos';
-import { adicionarMeses, formatarData, hojeISO, lerData } from '../utils/datas';
+import { adicionarMeses, descreverRegraSalario, formatarData, formatarMesAno, hojeISO, lerData, partesDaData, type RegraSalario } from '../utils/datas';
 import { lerValor } from '../utils/moeda';
 
 // Cadastro/edição de empréstimo. Passo 1 (opcional): anexar o contrato em PDF — o app lê os termos
@@ -69,6 +71,14 @@ export function EmprestimoForm() {
   const carregado = useRef(false);
   /** A pessoa mexeu na caixa "Conferido" (aí o app não muda mais sozinho). */
   const conferidoManual = useRef(false);
+  // Consignado: desconto direto no salário e o dia em que o salário cai
+  const regraSalva = useRegraSalario();
+  const [descontoEmFolha, setDescontoEmFolha] = useState(false);
+  const [regra, setRegra] = useState<RegraSalario>({ tipo: 'dia', dia: 5 });
+  const regraTocada = useRef(false);
+  const [primeiraEstimada, setPrimeiraEstimada] = useState(false);
+  const jaPagasManual = useRef(false);
+  useEffect(() => { if (regraSalva && !regraTocada.current) setRegra(regraSalva); }, [regraSalva]);
 
   useEffect(() => {
     if (!existente || carregado.current) return;
@@ -84,6 +94,7 @@ export function EmprestimoForm() {
     setTrechos(e.trechos ?? {});
     setLidos(new Set(Object.keys(e.trechos ?? {})));
     setConferido(e.termosConferidos);
+    setDescontoEmFolha(!!e.descontoEmFolha);
     conferidoManual.current = e.termosConferidos && !e.conferenciaAutomatica;
     setArquivoAtualId(e.contratoArquivoId);
     setNomeArquivoAtual(existente.arquivo?.nome ?? '');
@@ -146,6 +157,15 @@ export function EmprestimoForm() {
       jurosMora: t.jurosMora !== undefined ? pct(t.jurosMora) : x.jurosMora,
       periodoMora: t.periodoMora ?? x.periodoMora,
     }));
+    if (t.tipo === 'consignado') setDescontoEmFolha(true);
+    // Sem a data da 1ª parcela, mas com a da contratação: o app estima a 1ª parcela
+    if (!t.dataPrimeiraParcela && t.dataContratacao) {
+      const estimada = primeiraParcelaPelaContratacao(t.dataContratacao, t.tipo === 'consignado', regra);
+      setC((x) => ({ ...x, dataPrimeiraParcela: estimada }));
+      setPrimeiraEstimada(true);
+    } else {
+      setPrimeiraEstimada(false);
+    }
   }
 
   function removerContrato() {
@@ -174,10 +194,18 @@ export function EmprestimoForm() {
       cetAnual: (() => { const v = lerPct(c.cetAnual); return v !== null && !Number.isNaN(v) ? v : null; })(),
       multaAtraso: lerPct(c.multaAtraso) || 0, jurosMora: lerPct(c.jurosMora) || 0, periodoMora: c.periodoMora,
       dataPrimeiraParcela: c.dataPrimeiraParcela, instituicao: c.instituicao.trim(), numeroContrato: c.numeroContrato.trim(),
+      dataContratacao: c.dataContratacao.trim() ? lerData(c.dataContratacao) : null,
       originais: termosLidos ? originaisDoContrato(termosLidos) : undefined,
     })
     : null;
   const tudoCerto = conferencia?.tudoCerto ?? false;
+
+  // Parcelas já pagas: calculadas pelo app (consignado: salários recebidos; outros: parcelas vencidas)
+  const emFolha = c.tipo === 'consignado' && descontoEmFolha;
+  const estimativaPagas = estimarParcelasPagas({ dataPrimeiraParcela: c.dataPrimeiraParcela, numeroParcelas, descontoEmFolha: emFolha }, emFolha ? regra : null);
+  useEffect(() => {
+    if (!jaPagasManual.current) setC((x) => (x.parcelasJaPagas === String(estimativaPagas) ? x : { ...x, parcelasJaPagas: String(estimativaPagas) }));
+  }, [estimativaPagas]);
 
   // A análise do app marca (ou desmarca) "Conferido" sozinha, até a pessoa mexer na caixa.
   useEffect(() => {
@@ -194,7 +222,8 @@ export function EmprestimoForm() {
       multaAtraso: lerPct(c.multaAtraso) ?? 0, jurosMora: lerPct(c.jurosMora) ?? 0, periodoMora: c.periodoMora,
       trechos, termosConferidos: temContrato ? conferido : false,
       conferenciaAutomatica: !!conferencia && conferido && tudoCerto && !conferidoManual.current, observacao: c.observacao.trim() || undefined,
-      parcelasJaPagas: editando ? 0 : Number(c.parcelasJaPagas) || 0,
+      parcelasJaPagas: editando ? 0 : emFolha ? estimativaPagas : Number(c.parcelasJaPagas) || 0,
+      descontoEmFolha: emFolha,
     };
     const encontrados = validarEmprestimo(dados);
     if (c.valorEmprestado && lerValor(c.valorEmprestado) === null) encontrados.valorEmprestado = 'Valor inválido. Exemplo: 10.000,00';
@@ -214,6 +243,7 @@ export function EmprestimoForm() {
     try {
       let arquivoId = arquivoAtualId;
       if (arquivoNovo) arquivoId = await guardarArquivo(arquivoNovo);
+      if (emFolha) await salvarRegraSalario(regra); // o dia do salário vale para o app todo
       if (editando) {
         await atualizarEmprestimo(id!, dados, arquivoId);
         avisar('Empréstimo atualizado.');
@@ -278,7 +308,7 @@ export function EmprestimoForm() {
           </Campo>
         </div>
         <Campo id="tipo" rotulo="Tipo" origem={origem('tipo')}>
-          <select id="campo-tipo" value={c.tipo} onChange={(e) => muda('tipo', e.target.value as TipoEmprestimo)} className={ENTRADA}>
+          <select id="campo-tipo" value={c.tipo} onChange={(e) => { muda('tipo', e.target.value as TipoEmprestimo); setDescontoEmFolha(e.target.value === 'consignado'); }} className={ENTRADA}>
             {Object.entries(TIPOS).map(([v, t]) => <option key={v} value={v}>{t}</option>)}
           </select>
         </Campo>
@@ -298,8 +328,9 @@ export function EmprestimoForm() {
           </Campo>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Campo id="dataPrimeiraParcela" rotulo="Vencimento da 1ª parcela" erro={erros.dataPrimeiraParcela} origem={origem('dataPrimeiraParcela')}>
-            <CampoData id="campo-dataPrimeiraParcela" rotulo="Vencimento da 1ª parcela" valor={c.dataPrimeiraParcela} aoMudar={(d) => muda('dataPrimeiraParcela', d)} />
+          <Campo id="dataPrimeiraParcela" rotulo="Vencimento da 1ª parcela" erro={erros.dataPrimeiraParcela} origem={origem('dataPrimeiraParcela')}
+            dica={primeiraEstimada ? 'Estimada pela data da contratação (o contrato não informa). Confira.' : undefined}>
+            <CampoData id="campo-dataPrimeiraParcela" rotulo="Vencimento da 1ª parcela" valor={c.dataPrimeiraParcela} aoMudar={(d) => { muda('dataPrimeiraParcela', d); setPrimeiraEstimada(false); }} />
           </Campo>
           <Campo id="dataContratacao" rotulo="Data da contratação (opcional)" erro={erros.dataContratacao} origem={origem('dataContratacao')}>
             <input id="campo-dataContratacao" inputMode="numeric" value={c.dataContratacao} onChange={(e) => muda('dataContratacao', e.target.value.replace(/[^\d/]/g, '').slice(0, 10))} placeholder="dd/mm/aaaa" className={ENTRADA} />
@@ -353,11 +384,34 @@ export function EmprestimoForm() {
         </div>
       </Secao>
 
+      {c.tipo === 'consignado' && (
+        <Secao titulo="5 · Desconto no salário">
+          <label className="flex min-h-11 items-start gap-3 text-[15px]">
+            <input id="campo-descontoEmFolha" type="checkbox" checked={descontoEmFolha} onChange={(e) => setDescontoEmFolha(e.target.checked)} className="mt-0.5 h-6 w-6 shrink-0 accent-primaria" />
+            <span><strong>As parcelas são descontadas direto do meu salário</strong><br /><span className="text-sm text-suave">O app marca cada parcela como paga no dia do salário — você não precisa registrar.</span></span>
+          </label>
+          {descontoEmFolha && (
+            <div className="flex flex-col gap-1">
+              <p className="m-0 text-sm font-bold" id="rotulo-salario">Dia do pagamento do salário</p>
+              <EditorSalario valor={regra} aoMudar={(r) => { regraTocada.current = true; setRegra(r); }} prefixo="campo-salario" />
+              <p className="m-0 text-xs text-suave">Fica guardado para o app todo; dá para mudar em Configurações.</p>
+            </div>
+          )}
+        </Secao>
+      )}
+
       {!editando && (
-        <Secao titulo="5 · Parcelas já pagas">
-          <Campo id="parcelasJaPagas" rotulo="Quantas parcelas você já pagou?" dica="Se o empréstimo já está em andamento. Elas entram como pagas em dia, sem criar despesas novas." erro={erros.parcelasJaPagas}>
-            <input id="campo-parcelasJaPagas" inputMode="numeric" value={c.parcelasJaPagas} onChange={(e) => muda('parcelasJaPagas', e.target.value.replace(/\D/g, '').slice(0, 3))} className={ENTRADA} />
-          </Campo>
+        <Secao titulo={`${c.tipo === 'consignado' ? '6' : '5'} · Parcelas já pagas`}>
+          {emFolha ? (
+            <p className="m-0 rounded-2xl bg-[#E7F6EA] p-3 text-sm text-ok-texto" data-testid="parcelas-calculadas">
+              <strong>{estimativaPagas} {estimativaPagas === 1 ? 'parcela já descontada' : 'parcelas já descontadas'}</strong> — o app contou os salários recebidos ({descreverRegraSalario(regra)}){estimativaPagas > 0 ? ` de ${formatarMesAno(partesDaData(c.dataPrimeiraParcela).ano, partesDaData(c.dataPrimeiraParcela).mes)} até hoje` : ''}{c.dataContratacao ? `, desde a contratação em ${c.dataContratacao}` : ''}.
+            </p>
+          ) : (
+            <Campo id="parcelasJaPagas" rotulo="Quantas parcelas você já pagou?" erro={erros.parcelasJaPagas}
+              dica={`Calculado pelo app: ${estimativaPagas} ${estimativaPagas === 1 ? 'parcela venceu' : 'parcelas venceram'} até hoje. Ajuste se alguma não foi paga.`}>
+              <input id="campo-parcelasJaPagas" inputMode="numeric" value={c.parcelasJaPagas} onChange={(e) => { jaPagasManual.current = true; muda('parcelasJaPagas', e.target.value.replace(/\D/g, '').slice(0, 3)); }} className={ENTRADA} />
+            </Campo>
+          )}
         </Secao>
       )}
 

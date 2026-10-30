@@ -1,6 +1,11 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Estrutura } from './componentes/layout/Estrutura';
+import { CadastroPix } from './paginas/CadastroPix';
+import { CofrinhoDetalhe } from './paginas/CofrinhoDetalhe';
+import { CofrinhoForm } from './paginas/CofrinhoForm';
+import { Cofrinhos } from './paginas/Cofrinhos';
 import { Configuracoes } from './paginas/Configuracoes';
+import { GuardarPix } from './paginas/GuardarPix';
 import { Dividas } from './paginas/Dividas';
 import { EmprestimoDetalhe } from './paginas/EmprestimoDetalhe';
 import { EmprestimoForm } from './paginas/EmprestimoForm';
@@ -23,7 +28,12 @@ export function App() {
         <Route path="/dividas/novo" element={<EmprestimoForm />} />
         <Route path="/dividas/:id" element={<EmprestimoDetalhe />} />
         <Route path="/dividas/:id/editar" element={<EmprestimoForm />} />
-        <Route path="/cofrinhos" element={<EmConstrucao titulo="Cofrinhos" etapa={9} descricao="Metas de economia com barra de progresso e o “Guardar agora” com Pix seguro." />} />
+        <Route path="/cofrinhos" element={<Cofrinhos />} />
+        <Route path="/cofrinhos/novo" element={<CofrinhoForm />} />
+        <Route path="/cofrinhos/pix" element={<CadastroPix />} />
+        <Route path="/cofrinhos/:id" element={<CofrinhoDetalhe />} />
+        <Route path="/cofrinhos/:id/editar" element={<CofrinhoForm />} />
+        <Route path="/cofrinhos/:id/guardar" element={<GuardarPix />} />
         <Route path="/desejos" element={<EmConstrucao titulo="Desejos" etapa={10} descricao="Intenções de compra: à vista ou parcelado, e em quanto tempo você consegue." />} />
         <Route path="/relatorios" element={<EmConstrucao titulo="Relatórios" etapa={11} descricao="Relatórios semanal, mensal e anual, com exportação em PDF e planilha." />} />
         <Route path="/configuracoes" element={<Configuracoes />} />

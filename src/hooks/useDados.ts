@@ -44,3 +44,21 @@ export function useEmprestimo(id: number | null) {
     return { emprestimo, pagamentos, arquivo };
   }, [id]);
 }
+
+/** Cofrinhos com os movimentos de cada um. */
+export function useCofrinhos() {
+  return useLiveQuery(async () => {
+    const [cofrinhos, movimentos] = await Promise.all([banco.cofrinhos.toArray(), banco.movimentosCofrinho.toArray()]);
+    return cofrinhos.map((c) => ({ cofrinho: c, movimentos: movimentos.filter((m) => m.cofrinhoId === c.id) }));
+  }, []);
+}
+
+/** Um cofrinho e seus movimentos (null = não existe). */
+export function useCofrinho(id: number | null) {
+  return useLiveQuery(async () => {
+    if (!id) return null;
+    const cofrinho = await banco.cofrinhos.get(id);
+    if (!cofrinho) return null;
+    return { cofrinho, movimentos: await banco.movimentosCofrinho.where('cofrinhoId').equals(id).toArray() };
+  }, [id]);
+}

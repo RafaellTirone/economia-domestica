@@ -130,3 +130,51 @@ export interface ArquivoGuardado {
   dados: Blob;
   criadoEm: string;
 }
+
+// ---------- Cofrinhos e desejos ----------
+
+export type OndeGuarda = 'tesouro-selic' | 'cdb' | 'caixinha' | 'poupanca' | 'conta' | 'outro';
+
+/** Meta de economia ligada a um lugar real onde o dinheiro está (sempre no nome da pessoa). */
+export interface Cofrinho {
+  id?: number;
+  nome: string;
+  meta: Centavos;
+  /** Data limite para chegar na meta (opcional). */
+  prazo: DataISO | null;
+  ondeGuarda: OndeGuarda;
+  /** Rendimento estimado em % ao mês (editável). Null = sem rendimento. */
+  rendimentoMensal: number | null;
+  /** Quanto pretende guardar por mês (opcional, para a previsão). */
+  depositoMensal: Centavos | null;
+  criadoEm: string;
+}
+
+export interface MovimentoCofrinho {
+  id?: number;
+  cofrinhoId: number;
+  tipo: 'deposito' | 'saque';
+  valor: Centavos;
+  data: DataISO;
+  via: 'pix' | 'manual';
+  /** Lançamento "Guardei" criado junto (não conta como despesa). */
+  lancamentoId: number | null;
+}
+
+/** Intenção de compra. */
+export interface Desejo {
+  id?: number;
+  nome: string;
+  precoVista: Centavos;
+  /** Se parcelar: número de parcelas e valor de cada uma. */
+  parcelas: number | null;
+  valorParcela: Centavos | null;
+  prioridade: 'alta' | 'media' | 'baixa';
+  /** Quanto pretende guardar por mês para comprar. */
+  guardarPorMes: Centavos | null;
+  /** Até quando quer comprar (opcional). */
+  quando: DataISO | null;
+  cofrinhoId: number | null;
+  comprado: boolean;
+  criadoEm: string;
+}

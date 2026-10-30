@@ -62,3 +62,8 @@ export function useCofrinho(id: number | null) {
     return { cofrinho, movimentos: await banco.movimentosCofrinho.where('cofrinhoId').equals(id).toArray() };
   }, [id]);
 }
+
+/** Desejos (intenções de compra). */
+export function useDesejos() {
+  return useLiveQuery(() => banco.desejos.toArray(), []);
+}

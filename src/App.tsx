@@ -5,6 +5,8 @@ import { CofrinhoDetalhe } from './paginas/CofrinhoDetalhe';
 import { CofrinhoForm } from './paginas/CofrinhoForm';
 import { Cofrinhos } from './paginas/Cofrinhos';
 import { Configuracoes } from './paginas/Configuracoes';
+import { DesejoForm } from './paginas/DesejoForm';
+import { Desejos } from './paginas/Desejos';
 import { GuardarPix } from './paginas/GuardarPix';
 import { Dividas } from './paginas/Dividas';
 import { EmprestimoDetalhe } from './paginas/EmprestimoDetalhe';
@@ -34,7 +36,9 @@ export function App() {
         <Route path="/cofrinhos/:id" element={<CofrinhoDetalhe />} />
         <Route path="/cofrinhos/:id/editar" element={<CofrinhoForm />} />
         <Route path="/cofrinhos/:id/guardar" element={<GuardarPix />} />
-        <Route path="/desejos" element={<EmConstrucao titulo="Desejos" etapa={10} descricao="Intenções de compra: à vista ou parcelado, e em quanto tempo você consegue." />} />
+        <Route path="/desejos" element={<Desejos />} />
+        <Route path="/desejos/novo" element={<DesejoForm />} />
+        <Route path="/desejos/:id/editar" element={<DesejoForm />} />
         <Route path="/relatorios" element={<EmConstrucao titulo="Relatórios" etapa={11} descricao="Relatórios semanal, mensal e anual, com exportação em PDF e planilha." />} />
         <Route path="/configuracoes" element={<Configuracoes />} />
         <Route path="*" element={<Navigate to="/" replace />} />

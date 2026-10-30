@@ -2,12 +2,14 @@ import { ArrowLeft, Lock, ShieldAlert } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CampoPin } from '../componentes/ui/CampoPin';
+import { ArquivosEscolhidos, BotaoAnexar } from '../componentes/ui/Comprovantes';
 import { CopiarCodigo } from '../componentes/ui/CopiarCodigo';
 import { Pote } from '../componentes/ui/Pote';
 import { QrCode } from '../componentes/ui/QrCode';
 import { Selo } from '../componentes/ui/Selo';
 import { useAvisos } from '../hooks/useAvisos';
 import { useCofrinho } from '../hooks/useDados';
+import { anexarComprovantes } from '../servicos/comprovantes';
 import { depositar, desfazerMovimento, resumirCofrinho, valorIncomum } from '../servicos/cofrinhos';
 import { PinIncorreto } from '../servicos/cofre';
 import { gerarBRCode, lerBRCode, mascararChave } from '../servicos/pix';
@@ -36,6 +38,7 @@ export function GuardarPix() {
   const [pix, setPix] = useState<{ codigo: string; dados: DadosPix; valor: number } | null>(null);
   const [restante, setRestante] = useState(VALIDADE_S);
   const [algoErrado, setAlgoErrado] = useState(false);
+  const [arquivos, setArquivos] = useState<File[]>([]);
 
   // Contagem: o QR some sozinho em 5 minutos
   useEffect(() => {
@@ -83,6 +86,7 @@ export function GuardarPix() {
   async function jaPaguei() {
     if (!pix) return;
     const movId = await depositar(c, pix.valor, hojeISO(), 'pix');
+    if (arquivos.length) await anexarComprovantes(movId, arquivos);
     avisar(`${formatarMoeda(pix.valor)} guardados em “${c.nome}”.`, { rotulo: 'Desfazer', executar: () => void desfazerMovimento(movId) });
     setPix(null);
     navigate(`/cofrinhos/${id}`, { replace: true });
@@ -147,6 +151,12 @@ export function GuardarPix() {
             <ShieldAlert size={18} aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>No app do seu banco, <strong>confira se aparece o SEU nome</strong> como destinatário antes de confirmar. Se aparecer outro nome, não pague.</span>
           </p>
+          <div className="flex flex-col gap-2 rounded-2xl border border-borda p-3">
+            <span className="text-sm font-bold">Pagou? Guarde o comprovante (opcional)</span>
+            <span className="text-xs text-suave">No app do banco, salve ou tire print do comprovante e anexe aqui.</span>
+            <BotaoAnexar id="pix-comprovante" aoEscolher={(l) => setArquivos((x) => [...x, ...l])} />
+            <ArquivosEscolhidos arquivos={arquivos} aoRemover={(i) => setArquivos((x) => x.filter((_, j) => j !== i))} />
+          </div>
           <button type="button" onClick={jaPaguei} className="min-h-14 rounded-2xl bg-primaria px-4 text-base font-extrabold text-white hover:bg-primaria-escura">Já paguei — registrar {formatarMoeda(pix.valor)}</button>
           <button type="button" onClick={() => { setAlgoErrado(true); setPix(null); }} className="min-h-12 rounded-2xl border-2 border-perigo-texto bg-cartao font-extrabold text-perigo-texto">Algo está errado</button>
         </section>

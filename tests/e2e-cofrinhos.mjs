@@ -169,9 +169,13 @@ confere('Aviso: confira o SEU nome no app do banco', (await page.getByTestId('av
 confere('QR com prazo: "O código some em 4:5x"', /O código some em 4:5\d/.test(nb(await page.getByTestId('pix-gerado').innerText())) || /5:00/.test(nb(await page.getByTestId('pix-gerado').innerText())));
 await page.screenshot({ path: join(CAPTURAS, 'pix-gerado.png'), fullPage: true });
 await verificarTela(page, 'Pix gerado · celular');
+await page.locator('#pix-comprovante').setInputFiles({ name: 'print-pix.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64') });
+confere('Pix: dá para anexar o comprovante antes do "Já paguei"', nb(await page.getByTestId('arquivos-escolhidos').innerText()).includes('print-pix.png'));
 await page.getByRole('button', { name: /Já paguei/ }).click();
 await page.getByTestId('saldo-cofrinho').filter({ hasText: '3.700,00' }).waitFor({ timeout: 8000 }).catch(() => {});
 confere('"Já paguei" registra o depósito: R$ 3.700,00 (74%)', (await saldo()) === 'R$ 3.700,00');
+await page.getByTestId('comprovantes').first().waitFor({ timeout: 8000 }).catch(() => {});
+confere('Pix: o comprovante aparece no depósito', (await page.getByTestId('comprovantes').count()) >= 1);
 confere('Histórico marca o depósito como Pix', nb(await page.getByTestId('historico-cofrinho').innerText()).includes('Depósito (Pix)'));
 
 // 9. Valor fora do comum e "Algo está errado"

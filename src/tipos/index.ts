@@ -159,6 +159,8 @@ export interface MovimentoCofrinho {
   via: 'pix' | 'manual';
   /** Lançamento "Guardei" criado junto (não conta como despesa). */
   lancamentoId: number | null;
+  /** Comprovantes (print do Pix, foto do recibo, PDF) guardados no aparelho — ids em "arquivos". */
+  comprovantes?: number[];
 }
 
 /** Intenção de compra. */

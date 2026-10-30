@@ -99,16 +99,19 @@ export async function sacar(c: Cofrinho, valor: Centavos, data: DataISO): Promis
 }
 
 export async function desfazerMovimento(id: number): Promise<void> {
-  await banco.transaction('rw', banco.movimentosCofrinho, banco.lancamentos, async () => {
+  await banco.transaction('rw', banco.movimentosCofrinho, banco.lancamentos, banco.arquivos, async () => {
     const m = await banco.movimentosCofrinho.get(id);
     if (m?.lancamentoId) await banco.lancamentos.delete(m.lancamentoId);
+    if (m?.comprovantes?.length) await banco.arquivos.bulkDelete(m.comprovantes);
     await banco.movimentosCofrinho.delete(id);
   });
 }
 
 /** Exclui o cofrinho e o histórico dele. Os lançamentos "Guardei" continuam (foram movimentos reais). */
 export async function excluirCofrinho(id: number): Promise<void> {
-  await banco.transaction('rw', banco.cofrinhos, banco.movimentosCofrinho, banco.desejos, async () => {
+  await banco.transaction('rw', banco.cofrinhos, banco.movimentosCofrinho, banco.desejos, banco.arquivos, async () => {
+    const movs = await banco.movimentosCofrinho.where('cofrinhoId').equals(id).toArray();
+    await banco.arquivos.bulkDelete(movs.flatMap((m) => m.comprovantes ?? []));
     await banco.movimentosCofrinho.where('cofrinhoId').equals(id).delete();
     await banco.desejos.filter((d) => d.cofrinhoId === id).modify({ cofrinhoId: null });
     await banco.cofrinhos.delete(id);

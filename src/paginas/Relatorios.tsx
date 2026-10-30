@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight, FileSpreadsheet, Printer } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
-import { BarrasHorizontais, BarrasReceitasDespesas, BarrasSimples } from '../componentes/graficos/Graficos';
+import { BarrasHorizontais, BarrasReceitasDespesas, BarrasSimples, ColunasSaldo, Linhas, Rosca, SeletorGrafico, TabelaValores } from '../componentes/graficos/Graficos';
+import { useGraficoPreferido } from '../servicos/preferencias';
 import { useCategorias, useCofrinhos, useTodosLancamentos } from '../hooks/useDados';
 import { resumirCofrinho } from '../servicos/cofrinhos';
 import { baixarArquivo, gerarCsv, linhasLancamentos, relatorioAnual, relatorioMensal, relatorioSemanal, type FatiaCategoria } from '../servicos/relatorios';
@@ -80,9 +81,9 @@ export function Relatorios() {
           ]} />
           {semanal.variacao !== null && <p className={`m-0 text-sm font-bold ${semanal.variacao > 0 ? 'text-perigo-texto' : 'text-ok-texto'}`} data-testid="comparacao-semana">{semanal.variacao > 0 ? `Você gastou ${formatarMoeda(semanal.despesas - semanal.despesasSemanaAnterior)} a mais que na semana anterior.` : `Você gastou ${formatarMoeda(semanal.despesasSemanaAnterior - semanal.despesas)} a menos que na semana anterior.`}</p>}
           <Bloco titulo="Gasto por dia">
-            <BarrasSimples rotulo="Gasto por dia da semana" dados={semanal.porDia.map((d, i) => ({ rotulo: `${DIAS[i]} ${formatarDiaMes(d.data).slice(0, 2)}`, valor: d.valor, dica: `${formatarData(d.data)}: ${formatarMoeda(d.valor)}` }))} />
+            <GraficoDias dias={semanal.porDia.map((d, i) => ({ rotulo: `${DIAS[i]} ${formatarDiaMes(d.data).slice(0, 2)}`, data: d.data, valor: d.valor }))} />
           </Bloco>
-          <Bloco titulo="Categorias que mais pesaram">{semanal.categorias.length ? <BarrasHorizontais dados={fatiasParaGrafico(semanal.categorias.slice(0, 5))} /> : <Vazio />}</Bloco>
+          <Bloco titulo="Categorias que mais pesaram">{semanal.categorias.length ? <GraficoCategorias rotulo="Categorias que mais pesaram na semana" dados={fatiasParaGrafico(semanal.categorias.slice(0, 5))} /> : <Vazio />}</Bloco>
           <Bloco titulo="Lançamentos da semana"><TabelaLancamentos lista={semanal.lancamentos} categorias={categorias} /></Bloco>
         </>
       )}
@@ -103,7 +104,7 @@ export function Relatorios() {
               </tbody>
             </table></div>
           </Bloco>
-          <Bloco titulo="Gastos por categoria">{mensal.categorias.length ? <BarrasHorizontais dados={fatiasParaGrafico(mensal.categorias)} /> : <Vazio />}</Bloco>
+          <Bloco titulo="Gastos por categoria">{mensal.categorias.length ? <GraficoCategorias rotulo="Gastos por categoria no mês" dados={fatiasParaGrafico(mensal.categorias)} /> : <Vazio />}</Bloco>
           <Bloco titulo="Cumprimento do orçamento">
             {mensal.orcamento.length ? (
               <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">{mensal.orcamento.map((o) => <li key={o.categoria.id}>{o.categoria.nome}: {formatarMoeda(o.gasto)} de {formatarMoeda(o.limite)} ({formatarPercentual(o.percentual, 0)}) {o.percentual > 100 ? '— estourou' : o.percentual >= 80 ? '— atenção' : '— ok'}</li>)}</ul>
@@ -120,17 +121,17 @@ export function Relatorios() {
             ['Receitas no ano', formatarMoeda(anual.receitas)], ['Despesas no ano', formatarMoeda(anual.despesas)], ['Economizado no ano', formatarMoeda(anual.economizado)],
             ['Média de gastos por mês', formatarMoeda(anual.mediaGastosMes)], ['Guardado em cofrinhos', formatarMoeda(anual.guardado)],
           ]} />
-          <Bloco titulo="Mês a mês"><BarrasReceitasDespesas rotulo={`Receitas e despesas de ${ano}, mês a mês`} meses={anual.meses.map((m) => ({ rotulo: MESES_CURTOS[m.mes - 1], receitas: m.receitas, despesas: m.despesas }))} /></Bloco>
+          <Bloco titulo="Mês a mês"><GraficoMeses ano={ano} meses={anual.meses.map((m) => ({ rotulo: MESES_CURTOS[m.mes - 1], receitas: m.receitas, despesas: m.despesas, saldo: m.saldo }))} /></Bloco>
           <Bloco titulo="Tabela do ano">
-            <div className="overflow-x-auto"><table className="w-full min-w-[420px] border-collapse text-sm whitespace-nowrap" data-testid="tabela-anual">
-              <thead><tr className="text-left text-xs text-suave"><th className="px-2 py-1.5">Mês</th><th className="px-2 py-1.5 text-right">Receitas</th><th className="px-2 py-1.5 text-right">Despesas</th><th className="px-2 py-1.5 text-right">Saldo</th><th className="px-2 py-1.5 text-right">Guardado</th></tr></thead>
+            <div className="overflow-x-auto"><table className="w-full border-collapse text-[13px] whitespace-nowrap sm:text-sm" data-testid="tabela-anual">
+              <thead><tr className="text-left text-xs text-suave"><th className="px-2 py-1.5">Mês</th><th className="px-2 py-1.5 text-right">Receitas</th><th className="px-2 py-1.5 text-right">Despesas</th><th className="px-2 py-1.5 text-right">Saldo</th><th className="hidden px-2 py-1.5 text-right sm:table-cell">Guardado</th></tr></thead>
               <tbody style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {anual.meses.map((m) => <tr key={m.mes} className="border-t border-borda"><td className="px-2 py-1.5">{MESES_CURTOS[m.mes - 1]}</td><td className="px-2 py-1.5 text-right">{formatarMoeda(m.receitas)}</td><td className="px-2 py-1.5 text-right">{formatarMoeda(m.despesas)}</td><td className="px-2 py-1.5 text-right">{formatarMoeda(m.saldo)}</td><td className="px-2 py-1.5 text-right">{formatarMoeda(m.guardado)}</td></tr>)}
-                <tr className="border-t-2 border-tinta font-extrabold"><td className="px-2 py-2">Total</td><td className="px-2 py-2 text-right">{formatarMoeda(anual.receitas)}</td><td className="px-2 py-2 text-right">{formatarMoeda(anual.despesas)}</td><td className="px-2 py-2 text-right">{formatarMoeda(anual.economizado)}</td><td className="px-2 py-2 text-right">{formatarMoeda(anual.guardado)}</td></tr>
+                {anual.meses.map((m) => <tr key={m.mes} className="border-t border-borda"><td className="px-2 py-1.5">{MESES_CURTOS[m.mes - 1]}</td><td className="px-2 py-1.5 text-right">{formatarMoeda(m.receitas)}</td><td className="px-2 py-1.5 text-right">{formatarMoeda(m.despesas)}</td><td className="px-2 py-1.5 text-right">{formatarMoeda(m.saldo)}</td><td className="hidden px-2 py-1.5 text-right sm:table-cell">{formatarMoeda(m.guardado)}</td></tr>)}
+                <tr className="border-t-2 border-tinta font-extrabold"><td className="px-2 py-2">Total</td><td className="px-2 py-2 text-right">{formatarMoeda(anual.receitas)}</td><td className="px-2 py-2 text-right">{formatarMoeda(anual.despesas)}</td><td className="px-2 py-2 text-right">{formatarMoeda(anual.economizado)}</td><td className="hidden px-2 py-2 text-right sm:table-cell">{formatarMoeda(anual.guardado)}</td></tr>
               </tbody>
             </table></div>
           </Bloco>
-          <Bloco titulo="Gastos por categoria no ano">{anual.categorias.length ? <BarrasHorizontais dados={fatiasParaGrafico(anual.categorias)} /> : <Vazio />}</Bloco>
+          <Bloco titulo="Gastos por categoria no ano">{anual.categorias.length ? <GraficoCategorias rotulo="Gastos por categoria no ano" dados={fatiasParaGrafico(anual.categorias)} /> : <Vazio />}</Bloco>
           <Bloco titulo="Maiores despesas do ano"><TabelaLancamentos lista={anual.maioresDespesas} categorias={categorias} /></Bloco>
           <Bloco titulo="Evolução das metas (cofrinhos)">
             {cofrinhos.length ? (
@@ -180,5 +181,49 @@ function TabelaLancamentos({ lista, categorias }: { lista: Lancamento[]; categor
         ))}
       </tbody>
     </table>
+  );
+}
+
+// ---------- Gráficos com "Ver como" (a escolha fica salva no aparelho) ----------
+
+const TIPOS_CATEGORIAS = [{ valor: 'barras', rotulo: 'Barras' }, { valor: 'pizza', rotulo: 'Pizza' }, { valor: 'tabela', rotulo: 'Tabela' }] as const;
+const TIPOS_DIAS = [{ valor: 'colunas', rotulo: 'Colunas' }, { valor: 'linha', rotulo: 'Linha' }, { valor: 'tabela', rotulo: 'Tabela' }] as const;
+const TIPOS_MESES = [{ valor: 'colunas', rotulo: 'Colunas' }, { valor: 'linhas', rotulo: 'Linhas' }, { valor: 'saldo', rotulo: 'Saldo do mês' }, { valor: 'tabela', rotulo: 'Tabela' }] as const;
+const valores = <T extends { valor: string }>(l: readonly T[]) => l.map((o) => o.valor as T['valor']);
+
+function GraficoCategorias({ dados, rotulo }: { dados: { rotulo: string; valor: number; percentual: number; cor: string }[]; rotulo: string }) {
+  const [tipo, setTipo] = useGraficoPreferido('categorias', 'barras', valores(TIPOS_CATEGORIAS));
+  return (
+    <div className="flex flex-col gap-3">
+      <SeletorGrafico id="ver-categorias" opcoes={TIPOS_CATEGORIAS} valor={tipo} aoMudar={setTipo} />
+      {tipo === 'barras' && <BarrasHorizontais dados={dados} />}
+      {tipo === 'pizza' && <Rosca dados={dados} rotulo={rotulo} />}
+      {tipo === 'tabela' && <TabelaValores colunas={['Categoria', 'Valor', '%']} linhas={dados.map((d) => ({ rotulo: d.rotulo, valores: [formatarMoeda(d.valor), formatarPercentual(d.percentual, 0)] }))} />}
+    </div>
+  );
+}
+
+function GraficoDias({ dias }: { dias: { rotulo: string; data: string; valor: number }[] }) {
+  const [tipo, setTipo] = useGraficoPreferido('dias', 'colunas', valores(TIPOS_DIAS));
+  return (
+    <div className="flex flex-col gap-3">
+      <SeletorGrafico id="ver-dias" opcoes={TIPOS_DIAS} valor={tipo} aoMudar={setTipo} />
+      {tipo === 'colunas' && <BarrasSimples rotulo="Gasto por dia da semana" dados={dias.map((d) => ({ rotulo: d.rotulo, valor: d.valor, dica: `${formatarData(d.data)}: ${formatarMoeda(d.valor)}` }))} />}
+      {tipo === 'linha' && <Linhas rotulo="Gasto por dia da semana" rotulos={dias.map((d) => d.rotulo.slice(0, 3))} series={[{ nome: 'Gastos', cor: 'var(--color-primaria)', valores: dias.map((d) => d.valor) }]} />}
+      {tipo === 'tabela' && <TabelaValores colunas={['Dia', 'Gasto']} linhas={dias.map((d) => ({ rotulo: `${d.rotulo.slice(0, 3)} ${formatarData(d.data)}`, valores: [formatarMoeda(d.valor)] }))} />}
+    </div>
+  );
+}
+
+function GraficoMeses({ ano, meses }: { ano: number; meses: { rotulo: string; receitas: number; despesas: number; saldo: number }[] }) {
+  const [tipo, setTipo] = useGraficoPreferido('meses', 'colunas', valores(TIPOS_MESES));
+  return (
+    <div className="flex flex-col gap-3">
+      <SeletorGrafico id="ver-meses" opcoes={TIPOS_MESES} valor={tipo} aoMudar={setTipo} />
+      {tipo === 'colunas' && <BarrasReceitasDespesas rotulo={`Receitas e despesas de ${ano}, mês a mês`} meses={meses} />}
+      {tipo === 'linhas' && <Linhas rotulo={`Receitas e despesas de ${ano}, em linhas`} rotulos={meses.map((m) => m.rotulo)} series={[{ nome: 'Receitas', cor: '#2a78d6', valores: meses.map((m) => m.receitas) }, { nome: 'Despesas', cor: '#eb6834', valores: meses.map((m) => m.despesas) }]} />}
+      {tipo === 'saldo' && <ColunasSaldo rotulo={`Quanto sobrou ou faltou em cada mês de ${ano}`} meses={meses.map((m) => ({ rotulo: m.rotulo, saldo: m.saldo }))} />}
+      {tipo === 'tabela' && <TabelaValores colunas={['Mês', 'Receitas', 'Despesas', 'Saldo']} linhas={meses.map((m) => ({ rotulo: m.rotulo, valores: [formatarMoeda(m.receitas), formatarMoeda(m.despesas), formatarMoedaComSinal(m.saldo)] }))} />}
+    </div>
   );
 }

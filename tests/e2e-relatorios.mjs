@@ -53,6 +53,20 @@ confere('Mensal: guardado em cofrinhos aparece separado (R$ 0,00 em lançamentos
 const comp = nb(await page.getByTestId('comparacao-mes').innerText());
 confere('Mensal: compara com o mês anterior (despesas R$ 5.000,00 no mês passado)', comp.includes('R$ 5.000,00'));
 confere('Mensal: gastos por categoria e maiores despesas', await page.getByRole('region', { name: 'Gastos por categoria' }).isVisible() && nb(await page.getByRole('region', { name: 'Maiores despesas' }).innerText()).includes('Aluguel; mês'));
+// "Ver como": trocar o formato do gráfico de categorias
+const blocoCat = page.getByRole('region', { name: 'Gastos por categoria' });
+confere('Gráfico de categorias tem "Ver como: Barras / Pizza / Tabela"', (await blocoCat.getByRole('radio').count()) === 3 && (await blocoCat.getByRole('radio', { name: 'Barras' }).getAttribute('aria-checked')) === 'true');
+await blocoCat.getByRole('radio', { name: 'Pizza' }).click();
+confere('Ver como Pizza: mostra a pizza com a legenda (nome, valor e %)', await blocoCat.locator('[data-tipo-grafico="rosca"]').isVisible() && nb(await blocoCat.innerText()).includes('Moradia'));
+await page.screenshot({ path: join(CAPTURAS, 'relatorio-pizza.png'), fullPage: true });
+await blocoCat.getByRole('radio', { name: 'Tabela' }).click();
+confere('Ver como Tabela: categoria, valor e %', await blocoCat.locator('[data-tipo-grafico="tabela"]').isVisible() && nb(await blocoCat.locator('table').innerText()).includes('R$ 1.650,00'));
+await blocoCat.getByRole('radio', { name: 'Pizza' }).click();
+await page.waitForFunction(() => new Promise((ok) => { const r = indexedDB.open('economia-domestica'); r.onsuccess = () => { const g = r.result.transaction('configuracoes').objectStore('configuracoes').get('preferencias-graficos'); g.onsuccess = () => { r.result.close(); ok(g.result?.valor?.categorias === 'pizza'); }; }; }), null, { timeout: 5000 }).catch(() => {});
+await page.reload();
+await page.getByTestId('numeros-relatorio').waitFor();
+await page.getByRole('region', { name: 'Gastos por categoria' }).locator('[data-tipo-grafico="rosca"]').waitFor({ timeout: 5000 }).catch(() => {});
+confere('A escolha fica salva: depois de recarregar continua em Pizza', await page.getByRole('region', { name: 'Gastos por categoria' }).locator('[data-tipo-grafico="rosca"]').isVisible());
 await page.screenshot({ path: join(CAPTURAS, 'relatorio-mensal.png'), fullPage: true });
 await verificarTela(page, 'Relatório mensal · celular');
 
@@ -79,9 +93,16 @@ confere(`Semanal: de segunda a domingo (${ddmmaaaa(segunda)} a ${ddmmaaaa(doming
 const nsem = nb(await page.getByTestId('numeros-relatorio').innerText());
 confere('Semanal: gastos R$ 292,50 x semana anterior R$ 100,00 (+192,5%)', nsem.includes('R$ 292,50') && nsem.includes('R$ 100,00') && nsem.includes('+192,5%'), nsem.replace(/\n/g, ' · '));
 confere('Semanal: frase de comparação', nb(await page.getByTestId('comparacao-semana').innerText()).includes('R$ 192,50 a mais'));
-confere('Semanal: categoria que mais pesou (Transporte)', nb(await page.getByRole('region', { name: 'Categorias que mais pesaram' }).innerText()).startsWith('Categorias que mais pesaram\nTransporte'));
+confere('Semanal: categoria que mais pesou (Transporte)', nb(await page.getByRole('region', { name: 'Categorias que mais pesaram' }).locator('li').first().innerText()).startsWith('Transporte'));
 await page.screenshot({ path: join(CAPTURAS, 'relatorio-semanal.png'), fullPage: true });
 await verificarTela(page, 'Relatório semanal · celular');
+const blocoDia = page.getByRole('region', { name: 'Gasto por dia' });
+await blocoDia.getByRole('radio', { name: 'Linha' }).click();
+confere('Gasto por dia: Ver como Linha', await blocoDia.locator('[data-tipo-grafico="linhas"]').isVisible());
+await blocoDia.getByRole('radio', { name: 'Tabela' }).click();
+confere('Gasto por dia: Ver como Tabela (7 dias)', (await blocoDia.locator('tbody tr').count()) === 7);
+confere('Semana: categorias também aparecem como Pizza (a escolha vale para todos os relatórios)', await page.getByRole('region', { name: 'Categorias que mais pesaram' }).locator('[data-tipo-grafico="rosca"]').isVisible());
+await verificarTela(page, 'Relatório semanal (linha/tabela) · celular');
 await page.getByRole('button', { name: 'Período anterior' }).click();
 confere('Semanal: navega para a semana anterior', (await page.getByTestId('periodo-relatorio').innerText()).includes(ddmmaaaa(segAnterior)));
 
@@ -91,6 +112,16 @@ const tabela = nb(await page.getByTestId('tabela-anual').innerText());
 confere('Anual: tabela com os 12 meses e total', tabela.split('\n').filter((l) => /^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/.test(l)).length === 12 && tabela.includes('Total'));
 confere('Anual: média de gastos por mês e total economizado', nb(await page.getByTestId('numeros-relatorio').innerText()).includes('Média de gastos por mês') && nb(await page.getByTestId('numeros-relatorio').innerText()).includes('Economizado no ano'));
 confere('Anual: evolução das metas (cofrinho Reserva 64%)', nb(await page.getByTestId('metas-ano').innerText()).replace(/\s+/g, ' ').includes('Reserva de emergência: R$ 3.200,00 de R$ 5.000,00 (64%)'));
+const blocoMes = page.getByRole('region', { name: 'Mês a mês' });
+confere('Mês a mês: 4 formatos (Colunas, Linhas, Saldo do mês, Tabela)', (await blocoMes.getByRole('radio').count()) === 4);
+await blocoMes.getByRole('radio', { name: 'Linhas' }).click();
+confere('Mês a mês: Ver como Linhas (receitas e despesas)', await blocoMes.locator('[data-tipo-grafico="linhas"]').isVisible() && nb(await blocoMes.innerText()).includes('Receitas'));
+await blocoMes.getByRole('radio', { name: 'Saldo do mês' }).click();
+confere('Mês a mês: Ver como Saldo do mês (sobrou x faltou)', await blocoMes.locator('[data-tipo-grafico="saldo"]').isVisible() && nb(await blocoMes.innerText()).includes('Sobrou'));
+await page.screenshot({ path: join(CAPTURAS, 'relatorio-saldo.png'), fullPage: true });
+await blocoMes.getByRole('radio', { name: 'Tabela' }).click();
+confere('Mês a mês: Ver como Tabela (12 meses)', (await blocoMes.locator('tbody tr').count()) === 12);
+await verificarTela(page, 'Relatório anual (formatos) · celular');
 await page.screenshot({ path: join(CAPTURAS, 'relatorio-anual.png'), fullPage: true });
 await verificarTela(page, 'Relatório anual · celular');
 const [down2] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Planilha (Excel)' }).click()]);

@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { Categoria, Configuracao, Lancamento } from '../tipos';
+import type { ArquivoGuardado, Categoria, Configuracao, Emprestimo, Lancamento, PagamentoParcela } from '../tipos';
 import { categoriasPadrao } from './categoriasPadrao';
 
 // Banco de dados local (IndexedDB) — os dados ficam SÓ no aparelho, nada vai para a internet.
@@ -9,6 +9,9 @@ export class BancoFinancas extends Dexie {
   categorias!: Table<Categoria, number>;
   lancamentos!: Table<Lancamento, number>;
   configuracoes!: Table<Configuracao, string>;
+  emprestimos!: Table<Emprestimo, number>;
+  pagamentosParcela!: Table<PagamentoParcela, number>;
+  arquivos!: Table<ArquivoGuardado, number>;
 
   constructor(nome = 'economia-domestica') {
     super(nome);
@@ -19,6 +22,14 @@ export class BancoFinancas extends Dexie {
       categorias: '++id, nome, tipo, ordem',
       lancamentos: '++id, data, tipo, categoriaId, situacao, recorrenciaId, [tipo+data]',
       configuracoes: 'chave',
+    });
+
+    // Versão 2: empréstimos, pagamentos de parcelas e arquivos (PDF do contrato).
+    // Os dados da versão 1 continuam intactos.
+    this.version(2).stores({
+      emprestimos: '++id, nome',
+      pagamentosParcela: '++id, emprestimoId, [emprestimoId+numeroParcela]',
+      arquivos: '++id',
     });
 
     // Roda uma única vez, quando o banco é criado: grava as categorias padrão.

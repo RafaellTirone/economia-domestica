@@ -71,3 +71,28 @@ describe('feriados e dias úteis', () => {
     expect(proximoDiaUtil('2026-11-10')).toBe('2026-11-10');
   });
 });
+
+import { diaDoSalario, lerDataPorExtenso } from './datas';
+
+describe('datas por extenso', () => {
+  it('lê "10 de março de 2025"', () => {
+    expect(lerDataPorExtenso('São Paulo, 10 de março de 2025.')).toBe('2025-03-10');
+    expect(lerDataPorExtenso('1º de Outubro de 2026')).toBe('2026-10-01');
+    expect(lerDataPorExtenso('31 de fevereiro de 2026')).toBeNull();
+  });
+});
+
+describe('dia do pagamento do salário', () => {
+  it('dia fixo: fim de semana/feriado adianta para o dia útil anterior', () => {
+    expect(diaDoSalario(2026, 10, { tipo: 'dia', dia: 5 })).toBe('2026-10-05'); // segunda
+    expect(diaDoSalario(2026, 7, { tipo: 'dia', dia: 5 })).toBe('2026-07-03'); // domingo → sexta
+    expect(diaDoSalario(2026, 2, { tipo: 'dia', dia: 30 })).toBe('2026-02-27'); // fevereiro curto, sábado → sexta
+  });
+  it('5º dia útil (CLT: sábado conta, domingo e feriado não)', () => {
+    expect(diaDoSalario(2026, 10, { tipo: 'dia-util', numero: 5 })).toBe('2026-10-06'); // 1 qui,2 sex,3 sáb,5 seg,6 ter
+    expect(diaDoSalario(2026, 11, { tipo: 'dia-util', numero: 5 })).toBe('2026-11-07'); // dom 1 e Finados 2 não contam; 3,4,5,6 e sáb 7
+  });
+  it('último dia útil', () => {
+    expect(diaDoSalario(2026, 10, { tipo: 'ultimo-util' })).toBe('2026-10-30'); // 31 é sábado
+  });
+});

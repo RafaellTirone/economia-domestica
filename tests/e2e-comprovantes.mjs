@@ -55,7 +55,7 @@ confere('PDF guardado como PDF', guardados.some((a) => a.tipo === 'application/p
 
 // 2. Ver em tela cheia
 await page.getByRole('button', { name: /Ver comprovante comprovante-pix/ }).click();
-await page.getByTestId('visualizador').waitFor();
+await page.getByTestId('visualizador').getByRole('img').waitFor({ timeout: 10000 }).catch(() => {});
 confere('Tocar na miniatura abre a foto em tela cheia', await page.getByTestId('visualizador').getByRole('img').isVisible());
 await page.screenshot({ path: join(CAPTURAS, 'comprovante-aberto.png') });
 await verificarTela(page, 'Comprovante aberto · celular');

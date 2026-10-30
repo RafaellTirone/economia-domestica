@@ -76,10 +76,10 @@ export function CofrinhoForm() {
       </div>
       <section className="flex flex-col gap-4 rounded-[22px] border border-borda bg-cartao p-4 md:p-5">
         <Campo id="cofrinho-nome" rotulo="Nome do objetivo" erro={erros.nome}>
-          <input id="cofrinho-nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={50} placeholder="Ex.: Reserva de emergência" className={ENTRADA} />
+          <input id="cofrinho-nome" value={nome} onChange={(e) => { setNome(e.target.value); setErros((x) => ({ ...x, nome: '' })); }} maxLength={50} placeholder="Ex.: Reserva de emergência" className={ENTRADA} />
         </Campo>
         <Campo id="cofrinho-meta" rotulo="Meta (R$)" erro={erros.meta}>
-          <input id="cofrinho-meta" inputMode="decimal" value={meta} onChange={(e) => setMeta(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="5.000,00" className={ENTRADA} />
+          <input id="cofrinho-meta" inputMode="decimal" value={meta} onChange={(e) => { setMeta(e.target.value.replace(/[^\d.,]/g, '')); setErros((x) => ({ ...x, meta: '' })); }} placeholder="5.000,00" className={ENTRADA} />
         </Campo>
         <label className="flex min-h-11 items-center gap-3 text-[15px] font-bold">
           <input id="cofrinho-temPrazo" type="checkbox" checked={temPrazo} onChange={(e) => setTemPrazo(e.target.checked)} className="h-6 w-6 accent-primaria" />Tenho uma data para chegar na meta
@@ -93,7 +93,7 @@ export function CofrinhoForm() {
         </Campo>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Campo id="cofrinho-rendimentoMensal" rotulo="Rendimento (% ao mês, opcional)" erro={erros.rendimentoMensal} dica="Veja no app do banco. É uma estimativa, sem descontar imposto.">
-            <input id="cofrinho-rendimentoMensal" inputMode="decimal" value={rendimento} onChange={(e) => setRendimento(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="0,8" className={ENTRADA} />
+            <input id="cofrinho-rendimentoMensal" inputMode="decimal" value={rendimento} onChange={(e) => { setRendimento(e.target.value.replace(/[^\d.,]/g, '')); setErros((x) => ({ ...x, rendimentoMensal: '' })); }} placeholder="0,8" className={ENTRADA} />
           </Campo>
           <Campo id="cofrinho-deposito" rotulo="Pretendo guardar por mês (R$, opcional)" dica="Usado na previsão até você começar a guardar.">
             <input id="cofrinho-deposito" inputMode="decimal" value={deposito} onChange={(e) => setDeposito(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="300,00" className={ENTRADA} />

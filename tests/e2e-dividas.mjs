@@ -89,7 +89,7 @@ confere('Leitor: taxa de juros 1,89% ao mês', (await valorDe('taxaJuros')) === 
 confere('Leitor: CET 27,58% ao ano', (await valorDe('cetAnual')) === '27,58');
 confere('Leitor: multa 2% e juros de mora 1% ao mês', (await valorDe('multaAtraso')) === '2' && (await valorDe('jurosMora')) === '1' && (await valorDe('periodoMora')) === 'mes');
 confere('Leitor: banco e número do contrato', (await valorDe('instituicao')) === 'Banco Horizonte S.A.' && (await valorDe('numeroContrato')) === '123456789-0');
-confere('Leitor: 1ª parcela 10/04/2025 e contratação 10/03/2025', (await page.getByTestId('campo-dataPrimeiraParcela-texto').innerText()) === '10/04/2025' && (await valorDe('dataContratacao')) === '10/03/2025');
+confere('Leitor: 1ª parcela 10/04/2025 e contratação 10/03/2025', (await page.locator('#campo-dataPrimeiraParcela').inputValue()) === '10/04/2025' && (await valorDe('dataContratacao')) === '10/03/2025');
 confere('Leitor: tipo "Consignado"', (await valorDe('tipo')) === 'consignado');
 const selos = await page.getByText('lido do contrato · ver trecho').count();
 confere('Cada um dos 13 valores lidos tem o selo "lido do contrato"', selos === 13, `${selos} selos`);
@@ -229,7 +229,7 @@ await page.getByTestId('resultado-leitura').filter({ hasText: /encontrei/ }).wai
 confere('Outro modelo: banco lido pelo rótulo "CREDOR:"', (await valorDe('instituicao')) === 'Paraná Banco S.A.');
 confere('Outro modelo: número lido de "Nº do contrato:"', (await valorDe('numeroContrato')) === '778899-1');
 confere('Outro modelo: data da contratação por extenso (5 de fevereiro de 2026)', (await valorDe('dataContratacao')) === '05/02/2026');
-confere('Outro modelo: sem 1ª parcela no contrato, o app estima pela contratação e avisa', (await page.getByTestId('campo-dataPrimeiraParcela-texto').innerText()) !== '' && await page.getByText(/Estimada pela data da contratação/).isVisible());
+confere('Outro modelo: sem 1ª parcela no contrato, o app estima pela contratação e avisa', (await page.locator('#campo-dataPrimeiraParcela').inputValue()) !== '' && await page.getByText(/Estimada pela data da contratação/).isVisible());
 await page.screenshot({ path: join(CAPTURAS, 'divida-outro-modelo.png'), fullPage: true });
 
 // 6. Lista: atrasada aparece primeiro, com resumo

@@ -73,8 +73,8 @@ export function DesejoForm() {
         <h1 className="m-0 text-xl font-extrabold md:text-2xl">{id ? 'Editar desejo' : 'Novo desejo'}</h1>
       </div>
       <section className="flex flex-col gap-4 rounded-[22px] border border-borda bg-cartao p-4 md:p-5">
-        <Campo id="desejo-nome" rotulo="O que você quer comprar" erro={erros.nome}><input id="desejo-nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={50} placeholder="Ex.: Viagem para Porto Seguro" className={ENTRADA} /></Campo>
-        <Campo id="desejo-preco" rotulo="Preço à vista (R$)" erro={erros.preco}><input id="desejo-preco" inputMode="decimal" value={preco} onChange={(e) => setPreco(e.target.value.replace(/[^\d.,]/g, ''))} placeholder="4.000,00" className={ENTRADA} /></Campo>
+        <Campo id="desejo-nome" rotulo="O que você quer comprar" erro={erros.nome}><input id="desejo-nome" value={nome} onChange={(e) => { setNome(e.target.value); setErros((x) => ({ ...x, nome: '' })); }} maxLength={50} placeholder="Ex.: Viagem para Porto Seguro" className={ENTRADA} /></Campo>
+        <Campo id="desejo-preco" rotulo="Preço à vista (R$)" erro={erros.preco}><input id="desejo-preco" inputMode="decimal" value={preco} onChange={(e) => { setPreco(e.target.value.replace(/[^\d.,]/g, '')); setErros((x) => ({ ...x, preco: '' })); }} placeholder="4.000,00" className={ENTRADA} /></Campo>
         <label className="flex min-h-11 items-center gap-3 font-bold"><input id="desejo-parcelado" type="checkbox" checked={parcelado} onChange={(e) => setParcelado(e.target.checked)} className="h-6 w-6 accent-primaria" />Também dá para parcelar</label>
         {parcelado && (
           <div className="grid grid-cols-2 gap-3">

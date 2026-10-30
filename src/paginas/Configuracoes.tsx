@@ -1,6 +1,10 @@
 import { ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { EditorSalario } from '../componentes/ui/EditorSalario';
 import { IconeCategoria } from '../componentes/ui/IconeCategoria';
+import { useAvisos } from '../hooks/useAvisos';
+import { salvarRegraSalario, useRegraSalario } from '../servicos/configuracoes';
+import type { RegraSalario } from '../utils/datas';
 import { pedirArmazenamentoPersistente, situacaoArmazenamento, type SituacaoArmazenamento } from '../db/armazenamento';
 import { useCategorias } from '../hooks/useDados';
 
@@ -8,6 +12,10 @@ import { useCategorias } from '../hooks/useDados';
 export function Configuracoes() {
   const categorias = useCategorias();
   const [protecao, setProtecao] = useState<SituacaoArmazenamento | null>(null);
+  const regraSalva = useRegraSalario();
+  const [regra, setRegra] = useState<RegraSalario>({ tipo: 'dia', dia: 5 });
+  const { avisar } = useAvisos();
+  useEffect(() => { if (regraSalva) setRegra(regraSalva); }, [regraSalva]);
   useEffect(() => { situacaoArmazenamento().then(setProtecao); }, []);
 
   return (
@@ -34,6 +42,14 @@ export function Configuracoes() {
           </div>
         </div>
         <p className="m-0 mt-3 text-sm text-suave">Backup (exportar e importar arquivo) chega na etapa 11.</p>
+      </section>
+
+      <section aria-labelledby="titulo-salario" className="rounded-[22px] border border-borda bg-cartao p-5">
+        <h2 id="titulo-salario" className="m-0 text-lg font-extrabold">Dia do pagamento do salário</h2>
+        <p className="m-0 mb-3 mt-1 text-sm text-suave">Usado no empréstimo consignado (desconto em folha) e nos lembretes. {regraSalva === null ? 'Ainda não cadastrado.' : ''}</p>
+        <EditorSalario valor={regra} aoMudar={setRegra} prefixo="config-salario" />
+        <button type="button" onClick={() => salvarRegraSalario(regra).then(() => avisar('Dia do salário salvo.'))}
+          className="mt-3 min-h-11 rounded-xl bg-primaria px-4 font-bold text-white hover:bg-primaria-escura">Salvar dia do salário</button>
       </section>
 
       <section aria-labelledby="titulo-categorias" className="rounded-[22px] border border-borda bg-cartao p-5">

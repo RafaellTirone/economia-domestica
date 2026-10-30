@@ -172,7 +172,7 @@ async function lancar(page, { tipo = 'Gastei', categoria, sub, valor, descricao,
   await page.locator('#filtro-fim').fill(iso(new Date(hoje.getFullYear(), hoje.getMonth() + 3, 0)));
   lista = nb(await page.getByTestId('lista-lancamentos').innerText());
   confere('Período personalizado (próximos 2 meses) mostra as parcelas 2 e 3', lista.includes('2 lançamentos') && lista.includes('parcela 3 de 3'), lista.split('\n')[0]);
-  confere('Datas do período aparecem em dd/mm/aaaa', /^\d{2}\/\d{2}\/\d{4}$/.test(await page.getByTestId('filtro-inicio-texto').innerText()));
+  confere('Datas do período aparecem em dd/mm/aaaa', /^\d{2}\/\d{2}\/\d{4}$/.test(await page.locator('#filtro-inicio').inputValue()));
   await page.getByLabel('Escolher outro período').uncheck();
 
   // 9. Editar
@@ -212,7 +212,7 @@ async function lancar(page, { tipo = 'Gastei', categoria, sub, valor, descricao,
   // 12. Data de ontem e data futura
   await page.getByRole('link', { name: 'Novo lançamento' }).click();
   await page.getByRole('button', { name: 'Ontem', exact: true }).click();
-  confere('Botão "Ontem" mostra a data em dd/mm/aaaa (mesmo com navegador em inglês)', (await page.getByTestId('campo-data-texto').innerText()) === ddmm(ontem));
+  confere('Botão "Ontem" mostra a data em dd/mm/aaaa (mesmo com navegador em inglês)', (await page.locator('#campo-data').inputValue()) === ddmm(ontem));
   const futura = iso(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 3));
   await page.locator('#campo-data').fill(futura);
   confere('Data futura desmarca "Já foi pago" sozinho', !(await page.getByLabel(/Já foi pago/).isChecked()) && await page.getByText(/data futura/).isVisible());

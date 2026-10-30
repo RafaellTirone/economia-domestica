@@ -226,3 +226,5 @@ tests/capturas/
 *.log
 .DS_Store
 *.tsbuildinfo
+dist-previa/
+tests/arquivos-teste/

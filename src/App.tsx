@@ -8,10 +8,10 @@ import { Configuracoes } from './paginas/Configuracoes';
 import { DesejoForm } from './paginas/DesejoForm';
 import { Desejos } from './paginas/Desejos';
 import { GuardarPix } from './paginas/GuardarPix';
+import { Relatorios } from './paginas/Relatorios';
 import { Dividas } from './paginas/Dividas';
 import { EmprestimoDetalhe } from './paginas/EmprestimoDetalhe';
 import { EmprestimoForm } from './paginas/EmprestimoForm';
-import { EmConstrucao } from './paginas/EmConstrucao';
 import { Inicio } from './paginas/Inicio';
 import { Lancamentos } from './paginas/Lancamentos';
 import { Lancar } from './paginas/Lancar';
@@ -39,7 +39,7 @@ export function App() {
         <Route path="/desejos" element={<Desejos />} />
         <Route path="/desejos/novo" element={<DesejoForm />} />
         <Route path="/desejos/:id/editar" element={<DesejoForm />} />
-        <Route path="/relatorios" element={<EmConstrucao titulo="Relatórios" etapa={11} descricao="Relatórios semanal, mensal e anual, com exportação em PDF e planilha." />} />
+        <Route path="/relatorios" element={<Relatorios />} />
         <Route path="/configuracoes" element={<Configuracoes />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

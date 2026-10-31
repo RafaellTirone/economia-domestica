@@ -1,10 +1,24 @@
 // Auditoria das contas que se repetem e da tela "Contas do mês" (checklist pago / a pagar).
 // Uso: npm run build && npm run test:e2e
+import { readFileSync } from 'node:fs';
 import { confere, encerrar, hoje, iniciarServidor, iso, nb, playwright, verificarTela } from './apoio.mjs';
 
 const URL_APP = await iniciarServidor(4189);
 const navegador = await playwright.chromium.launch();
-const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 }, locale: 'pt-BR', hasTouch: true, isMobile: true });
+const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 }, locale: 'pt-BR', hasTouch: true, isMobile: true, acceptDownloads: true });
+// Guarda as notificações mostradas, para conferir o aviso ao abrir o app.
+// O Chromium sem tela não informa a permissão concedida, então ela é simulada como "permitida".
+await ctx.addInitScript(() => {
+  window.__avisos = [];
+  if (window.ServiceWorkerRegistration) ServiceWorkerRegistration.prototype.showNotification = function (titulo, op) { window.__avisos.push([titulo, op?.body]); return Promise.resolve(); };
+  const Original = window.Notification;
+  if (Original) {
+    const Falsa = function (titulo, op) { window.__avisos.push([titulo, op?.body]); };
+    Object.defineProperty(Falsa, 'permission', { get: () => 'granted' });
+    Falsa.requestPermission = () => Promise.resolve('granted');
+    window.Notification = Falsa;
+  }
+});
 const page = await ctx.newPage();
 const erros = [];
 page.on('console', (m) => m.type() === 'error' && erros.push(m.text()));
@@ -121,7 +135,27 @@ await page.getByRole('button', { name: 'Próximo mês' }).click();
 await page.getByTestId('resumo-contas').filter({ hasText: 'Nenhuma conta' }).waitFor({ timeout: 5000 }).catch(() => {});
 confere('Mês que vem fica sem a Internet', (await page.getByTestId('conta').count()) === 0);
 
-// 8. Visão geral: "Precisa da sua atenção", contas do mês e para onde foi o dinheiro
+// 8. Lembretes: arquivo da agenda e aviso ao abrir o app
+await page.goto(`${URL_APP}/configuracoes`);
+const [baixado] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Pôr os vencimentos na agenda' }).click()]);
+const ics = readFileSync(await baixado.path(), 'utf8');
+confere('Agenda: arquivo .ics com nome e formato certos', baixado.suggestedFilename().endsWith('.ics') && ics.startsWith('BEGIN:VCALENDAR\r\n') && ics.trimEnd().endsWith('END:VCALENDAR'), baixado.suggestedFilename());
+confere('Agenda: tem o Aluguel dos próximos meses com aviso 3 dias antes e no dia', ics.includes('SUMMARY:Pagar Aluguel') && ics.includes('TRIGGER:-P2DT15H') && ics.includes('TRIGGER:PT9H'));
+confere('Agenda: não inclui a Internet que parou de repetir (além deste mês)', (ics.match(/SUMMARY:Pagar Internet/g) ?? []).length <= 1);
+await aviso().filter({ hasText: 'lembretes prontos' }).waitFor();
+await page.getByLabel(/Avisar quando eu abrir o app/).check();
+await aviso().filter({ hasText: 'ao abrir o app' }).waitFor();
+await page.goto(URL_APP);
+await page.getByTestId('atencao').waitFor();
+await page.waitForFunction(() => window.__avisos.length > 0, null, { timeout: 5000 }).catch(() => {});
+const avisos = await page.evaluate(() => window.__avisos);
+confere('Ao abrir o app: notificação com o que vence (Internet hoje/logo)', avisos.length === 1 && /Internet|vencimento|atrasada/.test(avisos[0][1]), JSON.stringify(avisos));
+await page.reload();
+await page.getByTestId('atencao').waitFor();
+await page.waitForTimeout(800);
+confere('Aviso aparece só uma vez por dia', (await page.evaluate(() => window.__avisos.length)) === 0);
+
+// 9. Visão geral: "Precisa da sua atenção", contas do mês e para onde foi o dinheiro
 await page.goto(URL_APP);
 await page.getByTestId('atencao').waitFor();
 const atencao = nb(await page.getByTestId('atencao').innerText());
@@ -133,7 +167,7 @@ confere('Barra "Para onde foi o dinheiro" mostra Moradia e o que sobrou', divisa
 confere('Visão geral mostra o resumo do ano', await page.getByTestId('resumo-ano').isVisible());
 await verificarTela(page, 'Visão geral completa · celular');
 
-// 9. Notebook
+// 10. Notebook
 const ctx2 = await navegador.newContext({ viewport: { width: 1280, height: 900 }, locale: 'pt-BR' });
 const p2 = await ctx2.newPage();
 await p2.goto(`${URL_APP}/contas`);

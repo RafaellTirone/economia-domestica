@@ -74,6 +74,15 @@ describe('contas que se repetem', () => {
     expect((await doAluguel()).at(-1)).toMatchObject({ data: '2027-01-15', valor: 165000 });
   });
 
+  it('mudar só o valor de uma conta do dia 31 num mês de 30 dias mantém o dia 31', async () => {
+    await criarComRepeticao({ ...aluguel('2026-10-31'), descricao: 'Aluguel' }, '2026-10-31');
+    const nov = (await doAluguel())[1];
+    expect(nov.data).toBe('2026-11-30');
+    await alterarDaquiPraFrente(nov.id!, { ...aluguel('2026-11-30', 160000) });
+    await gerarContasFixas('2026-11-01');
+    expect((await doAluguel()).at(-1)).toMatchObject({ data: '2026-12-31', valor: 160000 });
+  });
+
   it('parar de repetir apaga os meses seguintes a pagar e não gera mais', async () => {
     await criarComRepeticao(aluguel('2026-10-10'), '2026-10-31');
     const recId = Number((await doAluguel())[0].recorrenciaId);

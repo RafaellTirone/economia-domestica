@@ -6,6 +6,7 @@ import { Lancar } from './paginas/Lancar';
 import { useMes } from './hooks/useMes';
 import { gerarContasFixas } from './servicos/recorrencias';
 import { gerarDescontosConsignado } from './servicos/emprestimos';
+import { avisarAoAbrir, carregarEventos, textoDoAviso } from './servicos/lembretes';
 
 // Telas carregadas só quando abertas (o app abre mais rápido); Visão geral e Lançar vêm prontas.
 const CadastroPix = lazy(() => import('./paginas/CadastroPix').then((m) => ({ default: m.CadastroPix })));
@@ -29,9 +30,17 @@ const ContasDoMes = lazy(() => import('./paginas/ContasDoMes').then((m) => ({ de
 // Rotas (telas) do app. As que ainda não existem mostram em qual etapa chegam.
 export function App() {
   // Ao abrir o app e na virada do dia: cria as contas que se repetem (do mês e do próximo)
-  // e lança as parcelas de consignado descontadas do salário bruto
+  // e lança as parcelas de consignado descontadas do salário bruto; depois, o aviso do dia
   const { hoje } = useMes();
-  useEffect(() => { void gerarContasFixas(hoje).then(() => gerarDescontosConsignado(hoje)); }, [hoje]);
+  useEffect(() => {
+    void (async () => {
+      await gerarContasFixas(hoje);
+      await gerarDescontosConsignado(hoje);
+      // Aviso do dia (se a pessoa ligou em Configurações e o navegador permite)
+      const { eventos, atrasadas } = await carregarEventos(hoje);
+      await avisarAoAbrir(hoje, textoDoAviso(eventos, atrasadas, hoje));
+    })();
+  }, [hoje]);
   return (
     <Estrutura>
       <Suspense fallback={<p className="text-suave">Carregando…</p>}>

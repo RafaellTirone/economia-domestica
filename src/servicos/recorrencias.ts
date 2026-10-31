@@ -113,7 +113,9 @@ export async function alterarDaquiPraFrente(id: number, d: DadosLancamento): Pro
   const l = await banco.lancamentos.get(id);
   if (!l?.recorrenciaId) return;
   const recId = Number(l.recorrenciaId);
-  const molde = moldeDe(d);
+  const rec = await banco.recorrencias.get(recId);
+  // Se a data não mudou, o dia continua o da repetição (ex.: dia 31 que caiu em 30/11 segue 31)
+  const molde = { ...moldeDe(d), ...(d.data === l.data && rec ? { dia: rec.dia } : {}) };
   await banco.transaction('rw', banco.recorrencias, banco.lancamentos, async () => {
     await banco.recorrencias.update(recId, molde);
     const seguintes = await banco.lancamentos.where('recorrenciaId').equals(l.recorrenciaId!).filter((x) => x.data > l.data && x.situacao === 'a_pagar').toArray();

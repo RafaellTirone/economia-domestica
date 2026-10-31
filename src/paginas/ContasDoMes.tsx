@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { IconeCategoria } from '../componentes/ui/IconeCategoria';
 import { SeletorMes } from '../componentes/ui/SeletorMes';
+import { BotaoAgenda } from '../componentes/SecaoLembretes';
 import { useAvisos } from '../hooks/useAvisos';
 import { useCategorias, useTodosLancamentos } from '../hooks/useDados';
 import { useMes } from '../hooks/useMes';
@@ -136,6 +137,8 @@ export function ContasDoMes() {
           </ul>
         )}
         <p className="m-0 text-xs text-suave">Para mudar o valor ou o dia, toque na conta e escolha "neste e nos próximos meses".</p>
+        <BotaoAgenda className="mt-2 self-start" />
+        <p className="m-0 text-xs text-suave">A agenda do celular avisa 3 dias antes e no dia de cada vencimento.</p>
       </section>
 
       {parando && (

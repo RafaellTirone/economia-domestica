@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SecaoBackup } from '../componentes/SecaoBackup';
 import { SecaoDados } from '../componentes/SecaoDados';
+import { SecaoLembretes } from '../componentes/SecaoLembretes';
 import { SecaoInstalar } from '../componentes/SecaoInstalar';
 import { EditorSalario } from '../componentes/ui/EditorSalario';
 import { IconeCategoria } from '../componentes/ui/IconeCategoria';
@@ -49,6 +50,7 @@ export function Configuracoes() {
 
       <SecaoInstalar />
 
+      <SecaoLembretes />
       <SecaoBackup />
       <SecaoDados />
 

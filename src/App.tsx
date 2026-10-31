@@ -1,27 +1,29 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Estrutura } from './componentes/layout/Estrutura';
-import { CadastroPix } from './paginas/CadastroPix';
-import { CategoriaForm } from './paginas/CategoriaForm';
-import { Categorias } from './paginas/Categorias';
-import { Orcamento } from './paginas/Orcamento';
-import { CofrinhoDetalhe } from './paginas/CofrinhoDetalhe';
-import { CofrinhoForm } from './paginas/CofrinhoForm';
-import { Cofrinhos } from './paginas/Cofrinhos';
-import { Configuracoes } from './paginas/Configuracoes';
-import { DesejoForm } from './paginas/DesejoForm';
-import { Desejos } from './paginas/Desejos';
-import { GuardarPix } from './paginas/GuardarPix';
-import { Relatorios } from './paginas/Relatorios';
-import { Dividas } from './paginas/Dividas';
-import { EmprestimoDetalhe } from './paginas/EmprestimoDetalhe';
-import { EmprestimoForm } from './paginas/EmprestimoForm';
 import { Inicio } from './paginas/Inicio';
-import { Lancamentos } from './paginas/Lancamentos';
 import { Lancar } from './paginas/Lancar';
-import { ContasDoMes } from './paginas/ContasDoMes';
 import { useMes } from './hooks/useMes';
 import { gerarContasFixas } from './servicos/recorrencias';
+
+// Telas carregadas só quando abertas (o app abre mais rápido); Visão geral e Lançar vêm prontas.
+const CadastroPix = lazy(() => import('./paginas/CadastroPix').then((m) => ({ default: m.CadastroPix })));
+const CategoriaForm = lazy(() => import('./paginas/CategoriaForm').then((m) => ({ default: m.CategoriaForm })));
+const Categorias = lazy(() => import('./paginas/Categorias').then((m) => ({ default: m.Categorias })));
+const Orcamento = lazy(() => import('./paginas/Orcamento').then((m) => ({ default: m.Orcamento })));
+const CofrinhoDetalhe = lazy(() => import('./paginas/CofrinhoDetalhe').then((m) => ({ default: m.CofrinhoDetalhe })));
+const CofrinhoForm = lazy(() => import('./paginas/CofrinhoForm').then((m) => ({ default: m.CofrinhoForm })));
+const Cofrinhos = lazy(() => import('./paginas/Cofrinhos').then((m) => ({ default: m.Cofrinhos })));
+const Configuracoes = lazy(() => import('./paginas/Configuracoes').then((m) => ({ default: m.Configuracoes })));
+const DesejoForm = lazy(() => import('./paginas/DesejoForm').then((m) => ({ default: m.DesejoForm })));
+const Desejos = lazy(() => import('./paginas/Desejos').then((m) => ({ default: m.Desejos })));
+const GuardarPix = lazy(() => import('./paginas/GuardarPix').then((m) => ({ default: m.GuardarPix })));
+const Relatorios = lazy(() => import('./paginas/Relatorios').then((m) => ({ default: m.Relatorios })));
+const Dividas = lazy(() => import('./paginas/Dividas').then((m) => ({ default: m.Dividas })));
+const EmprestimoDetalhe = lazy(() => import('./paginas/EmprestimoDetalhe').then((m) => ({ default: m.EmprestimoDetalhe })));
+const EmprestimoForm = lazy(() => import('./paginas/EmprestimoForm').then((m) => ({ default: m.EmprestimoForm })));
+const Lancamentos = lazy(() => import('./paginas/Lancamentos').then((m) => ({ default: m.Lancamentos })));
+const ContasDoMes = lazy(() => import('./paginas/ContasDoMes').then((m) => ({ default: m.ContasDoMes })));
 
 // Rotas (telas) do app. As que ainda não existem mostram em qual etapa chegam.
 export function App() {
@@ -30,6 +32,7 @@ export function App() {
   useEffect(() => { void gerarContasFixas(hoje); }, [hoje]);
   return (
     <Estrutura>
+      <Suspense fallback={<p className="text-suave">Carregando…</p>}>
       <Routes>
         <Route path="/" element={<Inicio />} />
         <Route path="/lancar" element={<Lancar />} />
@@ -58,6 +61,7 @@ export function App() {
         <Route path="/categorias/:id" element={<CategoriaForm />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </Suspense>
     </Estrutura>
   );
 }

@@ -8,7 +8,7 @@ import { useAvisos } from '../hooks/useAvisos';
 import { useEmprestimo } from '../hooks/useDados';
 import { conferirContrato } from '../servicos/conferenciaContrato';
 import { salvarRegraSalario, useRegraSalario } from '../servicos/configuracoes';
-import { atualizarEmprestimo, criarEmprestimo, estimarParcelasPagas, guardarArquivo, primeiraParcelaPelaContratacao, validarEmprestimo, type DadosEmprestimo } from '../servicos/emprestimos';
+import { atualizarEmprestimo, criarEmprestimo, gerarDescontosConsignado, estimarParcelasPagas, guardarArquivo, primeiraParcelaPelaContratacao, validarEmprestimo, type DadosEmprestimo } from '../servicos/emprestimos';
 import { converterTaxa, formatarTaxa, NOME_PERIODO, taxaImplicita } from '../servicos/juros';
 import { formatarMoeda } from '../utils/moeda';
 import { analisarTextoContrato, extrairTextoDoPdf, type TermosLidos } from '../servicos/leitorContrato';
@@ -74,6 +74,7 @@ export function EmprestimoForm() {
   // Consignado: desconto direto no salário e o dia em que o salário cai
   const regraSalva = useRegraSalario();
   const [descontoEmFolha, setDescontoEmFolha] = useState(false);
+  const [salarioLancado, setSalarioLancado] = useState<'bruto' | 'liquido'>('liquido');
   const [regra, setRegra] = useState<RegraSalario>({ tipo: 'dia', dia: 5 });
   const regraTocada = useRef(false);
   const [primeiraEstimada, setPrimeiraEstimada] = useState(false);
@@ -95,6 +96,7 @@ export function EmprestimoForm() {
     setLidos(new Set(Object.keys(e.trechos ?? {})));
     setConferido(e.termosConferidos);
     setDescontoEmFolha(!!e.descontoEmFolha);
+    setSalarioLancado(e.salarioLancado ?? 'liquido');
     conferidoManual.current = e.termosConferidos && !e.conferenciaAutomatica;
     setArquivoAtualId(e.contratoArquivoId);
     setNomeArquivoAtual(existente.arquivo?.nome ?? '');
@@ -224,6 +226,11 @@ export function EmprestimoForm() {
       conferenciaAutomatica: !!conferencia && conferido && tudoCerto && !conferidoManual.current, observacao: c.observacao.trim() || undefined,
       parcelasJaPagas: editando ? 0 : emFolha ? estimativaPagas : Number(c.parcelasJaPagas) || 0,
       descontoEmFolha: emFolha,
+      salarioLancado: emFolha ? salarioLancado : undefined,
+      // Bruto: lança as parcelas descontadas como despesa a partir deste mês (sem repetir o passado)
+      lancarDescontoDesde: emFolha && salarioLancado === 'bruto'
+        ? (existente?.emprestimo.salarioLancado === 'bruto' && existente.emprestimo.lancarDescontoDesde) || `${hojeISO().slice(0, 7)}-01`
+        : null,
     };
     const encontrados = validarEmprestimo(dados);
     if (c.valorEmprestado && lerValor(c.valorEmprestado) === null) encontrados.valorEmprestado = 'Valor inválido. Exemplo: 10.000,00';
@@ -246,10 +253,12 @@ export function EmprestimoForm() {
       if (emFolha) await salvarRegraSalario(regra); // o dia do salário vale para o app todo
       if (editando) {
         await atualizarEmprestimo(id!, dados, arquivoId);
+        await gerarDescontosConsignado();
         avisar('Empréstimo atualizado.');
         navigate(`/dividas/${id}`, { replace: true });
       } else {
         const novoId = await criarEmprestimo(dados, arquivoId);
+        await gerarDescontosConsignado();
         avisar(`“${dados.nome}” cadastrado.`);
         navigate(`/dividas/${novoId}`, { replace: true });
       }
@@ -395,6 +404,17 @@ export function EmprestimoForm() {
               <p className="m-0 text-sm font-bold" id="rotulo-salario">Dia do pagamento do salário</p>
               <EditorSalario valor={regra} aoMudar={(r) => { regraTocada.current = true; setRegra(r); }} prefixo="campo-salario" />
               <p className="m-0 text-xs text-suave">Fica guardado para o app todo; dá para mudar em Configurações.</p>
+              <fieldset className="m-0 mt-3 border-0 p-0">
+                <legend className="p-0 text-sm font-bold">Como você lança o seu salário no app?</legend>
+                <label className="mt-1 flex min-h-11 items-start gap-3 text-[15px]">
+                  <input type="radio" name="salarioLancado" checked={salarioLancado === 'liquido'} onChange={() => setSalarioLancado('liquido')} className="mt-1 h-5 w-5 shrink-0 accent-primaria" />
+                  <span>O valor que cai na conta (líquido)<br /><span className="text-sm text-suave">A parcela já veio descontada: o app não lança nada, só marca como paga.</span></span>
+                </label>
+                <label className="flex min-h-11 items-start gap-3 text-[15px]">
+                  <input type="radio" name="salarioLancado" checked={salarioLancado === 'bruto'} onChange={() => setSalarioLancado('bruto')} className="mt-1 h-5 w-5 shrink-0 accent-primaria" />
+                  <span>O valor do holerite (bruto)<br /><span className="text-sm text-suave">O app lança a parcela como despesa no dia do salário, todo mês, a partir deste mês.</span></span>
+                </label>
+              </fieldset>
             </div>
           )}
         </Secao>

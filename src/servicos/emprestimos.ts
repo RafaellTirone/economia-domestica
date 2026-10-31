@@ -3,6 +3,7 @@ import type { Centavos, DataISO, Emprestimo, PagamentoParcela } from '../tipos';
 import { adicionarMeses, diaDoSalario, diferencaEmDias, formatarData, formatarDiaMes, hojeISO, partesDaData, proximoDiaUtil, type RegraSalario } from '../utils/datas';
 import { formatarMoeda, formatarPercentual } from '../utils/moeda';
 import { converterTaxa, encargosDeAtraso, saldoDevedor, tabelaDeParcelas, taxaImplicita, type Encargos } from './juros';
+import { lerRegraSalario } from './configuracoes';
 
 // Regras dos empréstimos: situação de cada parcela, atrasos com os encargos do contrato,
 // juros que a pessoa está pagando, mensagens de incentivo/alerta e registro de pagamentos.
@@ -271,5 +272,37 @@ export async function desfazerPagamento(pagamentoId: number): Promise<void> {
     const p = await banco.pagamentosParcela.get(pagamentoId);
     if (p?.lancamentoId) await banco.lancamentos.delete(p.lancamentoId);
     await banco.pagamentosParcela.delete(pagamentoId);
+  });
+}
+
+/**
+ * Consignado com salário lançado pelo valor BRUTO: no dia do salário, a parcela descontada vira
+ * despesa (categoria Dívidas) e fica registrada como paga. Só a partir de "lancarDescontoDesde",
+ * para não repetir o passado. Pode rodar quantas vezes quiser: o que já foi lançado não duplica.
+ */
+export async function gerarDescontosConsignado(hoje: DataISO = hojeISO(), regra?: RegraSalario | null): Promise<number> {
+  const regraSalario = regra === undefined ? await lerRegraSalario() : regra;
+  if (!regraSalario) return 0;
+  return banco.transaction('rw', banco.emprestimos, banco.pagamentosParcela, banco.lancamentos, banco.categorias, async () => {
+    let criados = 0;
+    const lista = (await banco.emprestimos.toArray()).filter((e) => e.descontoEmFolha && e.salarioLancado === 'bruto' && e.lancarDescontoDesde);
+    if (!lista.length) return 0;
+    const dividas = (await banco.categorias.where('nome').equals('Dívidas').first()) ?? (await banco.categorias.where('nome').equals('Outros').first())
+      ?? (await banco.categorias.where('tipo').equals('despesa').first());
+    for (const e of lista) {
+      const pagamentos = await banco.pagamentosParcela.where('emprestimoId').equals(e.id!).toArray();
+      const res = resumirEmprestimo(e, pagamentos, hoje, regraSalario);
+      for (const p of res.parcelas) {
+        if (!p.descontadaDoSalario || !p.pagamento || p.pagamento.dataPagamento < e.lancarDescontoDesde!) continue;
+        const lancamentoId = await banco.lancamentos.add({
+          tipo: 'despesa', data: p.pagamento.dataPagamento, descricao: `${e.nome} — parcela ${p.numero} de ${e.numeroParcelas} (desconto no salário)`,
+          valor: p.valor, categoriaId: dividas!.id!, subcategoriaId: 'parcela-de-emprestimo', forma: 'debito', fixa: false, situacao: 'pago',
+          exemplo: e.exemplo, criadoEm: new Date().toISOString(),
+        });
+        await banco.pagamentosParcela.add({ emprestimoId: e.id!, numeroParcela: p.numero, dataPagamento: p.pagamento.dataPagamento, valorPago: p.valor, lancamentoId, exemplo: e.exemplo });
+        criados++;
+      }
+    }
+    return criados;
   });
 }

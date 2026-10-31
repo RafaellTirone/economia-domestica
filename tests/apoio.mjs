@@ -63,7 +63,9 @@ export async function verificarTela(page, nome) {
     for (const el of document.querySelectorAll('button, a[href], input, select')) {
       if (!visivel(el) || el.closest('.sr-only')) continue;
       const b = el.getBoundingClientRect();
-      if (b.height < 44 && el.type !== 'checkbox') out.pequenos.push(`${el.tagName} "${(el.innerText || el.getAttribute('aria-label') || '').trim()}" ${Math.round(b.height)}px`);
+      // Caixa de marcar e botão de escolha: vale a área do rótulo em volta (tocar no texto também marca)
+      const alvo = (el.type === 'checkbox' || el.type === 'radio') ? (el.closest('label')?.getBoundingClientRect() ?? (el.type === 'checkbox' ? { height: 44 } : b)) : b;
+      if (alvo.height < 44) out.pequenos.push(`${el.tagName} "${(el.innerText || el.getAttribute('aria-label') || '').trim()}" ${Math.round(b.height)}px`);
       if (!(el.innerText || '').trim() && !el.getAttribute('aria-label') && !(el.labels && el.labels.length)) out.semNome.push(el.outerHTML.slice(0, 60));
     }
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);

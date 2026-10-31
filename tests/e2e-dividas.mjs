@@ -148,9 +148,20 @@ let jaVencidas = 0;
 for (let k = 0; k < 36; k++) if (pagamentoSalario(2025, 3 + k) <= hojeSemHora) jaVencidas = k + 1;
 const calculadas = nb(await page.getByTestId('parcelas-calculadas').innerText());
 confere(`Consignado: app calcula ${jaVencidas} parcelas já descontadas pelos salários recebidos`, calculadas.startsWith(`${jaVencidas} parcelas já descontadas`) && calculadas.includes('todo dia 10') && calculadas.includes('desde a contratação em 10/03/2025'), calculadas);
+confere('Consignado pergunta se o salário é lançado líquido ou bruto (padrão: líquido)', await page.getByLabel(/O valor que cai na conta \(líquido\)/).isChecked());
+await page.getByLabel(/O valor do holerite \(bruto\)/).check();
 await page.screenshot({ path: join(CAPTURAS, 'divida-consignado-salario.png'), fullPage: true });
 await page.getByRole('button', { name: 'Salvar empréstimo' }).click();
 await page.getByRole('heading', { name: 'Consignado do carro' }).waitFor();
+// Salário bruto: a parcela deste mês vira despesa no dia do salário (se o salário já caiu)
+const salarioDoMes = pagamentoSalario(hoje.getFullYear(), hoje.getMonth());
+const esperadas = salarioDoMes <= hojeSemHora ? 1 : 0;
+await page.waitForTimeout(300);
+const descontos = await page.evaluate(() => new Promise((ok) => {
+  const r = indexedDB.open('economia-domestica');
+  r.onsuccess = () => { const q = r.result.transaction('lancamentos').objectStore('lancamentos').getAll(); q.onsuccess = () => { r.result.close(); ok(q.result.filter((l) => l.descricao.includes('desconto no salário'))); }; };
+}));
+confere(`Salário bruto: lança ${esperadas} parcela deste mês como despesa (R$ 385,43, sem repetir o passado)`, descontos.length === esperadas && descontos.every((l) => l.valor === 38543), JSON.stringify(descontos.map((l) => [l.data, l.valor])));
 confere('Salvou e abriu a página do contrato', nb(await aviso().innerText()).includes('“Consignado do carro” cadastrado.'));
 
 // 3. Página do contrato: juros que está pagando

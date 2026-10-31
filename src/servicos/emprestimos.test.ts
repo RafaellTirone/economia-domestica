@@ -106,3 +106,32 @@ describe('consignado: parcelas descontadas do salário', () => {
     expect(primeiraParcelaPelaContratacao('2025-03-10', false, null)).toBe('2025-04-10');
   });
 });
+
+describe('consignado com salário bruto', async () => {
+  const { banco } = await import('../db/banco');
+  const { gerarDescontosConsignado } = await import('./emprestimos');
+  const regra = { tipo: 'dia' as const, dia: 5 };
+  const base = {
+    nome: 'Consignado', instituicao: '', numeroContrato: '', tipo: 'consignado' as const, valorEmprestado: 1000000, numeroParcelas: 24, valorParcela: 52000,
+    taxaJuros: 1.8, periodoTaxa: 'mes' as const, cetAnual: null, sistema: 'price' as const, dataContratacao: null, dataPrimeiraParcela: '2026-06-10',
+    multaAtraso: 2, jurosMora: 1, periodoMora: 'mes' as const, trechos: {}, termosConferidos: true, contratoArquivoId: null, criadoEm: '', descontoEmFolha: true,
+  };
+
+  it('bruto: lança a parcela como despesa no dia do salário, só a partir do mês escolhido e sem duplicar', async () => {
+    await banco.delete(); await banco.open();
+    const id = await banco.emprestimos.add({ ...base, salarioLancado: 'bruto', lancarDescontoDesde: '2026-09-01' });
+    expect(await gerarDescontosConsignado('2026-10-20', regra)).toBe(2); // 04/09 (05/09 é sábado) e 05/10
+    expect(await gerarDescontosConsignado('2026-10-20', regra)).toBe(0);
+    const lancs = (await banco.lancamentos.toArray()).sort((a, b) => a.data.localeCompare(b.data));
+    expect(lancs.map((l) => [l.data, l.valor, l.tipo])).toEqual([['2026-09-04', 52000, 'despesa'], ['2026-10-05', 52000, 'despesa']]);
+    expect((await banco.pagamentosParcela.where('emprestimoId').equals(id).toArray()).map((p) => p.numeroParcela)).toEqual([4, 5]);
+    expect(await gerarDescontosConsignado('2026-11-05', regra)).toBe(1);
+  });
+
+  it('líquido: não lança nada (a parcela já veio descontada)', async () => {
+    await banco.delete(); await banco.open();
+    await banco.emprestimos.add({ ...base, salarioLancado: 'liquido', lancarDescontoDesde: null });
+    expect(await gerarDescontosConsignado('2026-10-20', regra)).toBe(0);
+    expect(await banco.lancamentos.count()).toBe(0);
+  });
+});

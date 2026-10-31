@@ -5,6 +5,7 @@ import { Inicio } from './paginas/Inicio';
 import { Lancar } from './paginas/Lancar';
 import { useMes } from './hooks/useMes';
 import { gerarContasFixas } from './servicos/recorrencias';
+import { gerarDescontosConsignado } from './servicos/emprestimos';
 
 // Telas carregadas só quando abertas (o app abre mais rápido); Visão geral e Lançar vêm prontas.
 const CadastroPix = lazy(() => import('./paginas/CadastroPix').then((m) => ({ default: m.CadastroPix })));
@@ -27,9 +28,10 @@ const ContasDoMes = lazy(() => import('./paginas/ContasDoMes').then((m) => ({ de
 
 // Rotas (telas) do app. As que ainda não existem mostram em qual etapa chegam.
 export function App() {
-  // Contas que se repetem: cria as do mês (e do próximo) ao abrir o app e na virada do dia
+  // Ao abrir o app e na virada do dia: cria as contas que se repetem (do mês e do próximo)
+  // e lança as parcelas de consignado descontadas do salário bruto
   const { hoje } = useMes();
-  useEffect(() => { void gerarContasFixas(hoje); }, [hoje]);
+  useEffect(() => { void gerarContasFixas(hoje).then(() => gerarDescontosConsignado(hoje)); }, [hoje]);
   return (
     <Estrutura>
       <Suspense fallback={<p className="text-suave">Carregando…</p>}>

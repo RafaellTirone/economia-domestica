@@ -125,6 +125,13 @@ export interface Emprestimo {
   termosConferidos: boolean;
   /** Consignado: parcelas descontadas direto do salário (conta como paga no dia do salário). */
   descontoEmFolha?: boolean;
+  /**
+   * Consignado: como o salário é lançado no app. 'bruto' (valor do holerite) → o app lança a parcela
+   * como despesa no dia do salário; 'liquido' (o que cai na conta) → nada a lançar, já veio descontado.
+   */
+  salarioLancado?: 'bruto' | 'liquido';
+  /** A partir de quando o app lança as parcelas descontadas como despesa. */
+  lancarDescontoDesde?: DataISO | null;
   /** A conferência foi feita automaticamente pela análise do app (tudo bateu). */
   conferenciaAutomatica?: boolean;
   contratoArquivoId: number | null;

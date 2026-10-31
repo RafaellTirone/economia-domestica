@@ -228,3 +228,4 @@ tests/capturas/
 *.tsbuildinfo
 dist-previa/
 tests/arquivos-teste/
+.trabalho/

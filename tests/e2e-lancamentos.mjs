@@ -154,6 +154,7 @@ async function lancar(page, { tipo = 'Gastei', categoria, sub, valor, descricao,
 
   // 8. Filtros e busca
   await page.getByRole('radio', { name: 'Receitas' }).click();
+await page.getByTestId('lista-lancamentos').filter({ hasText: '1 lançamento' }).waitFor({ timeout: 5000 }).catch(() => {});
   lista = nb(await page.getByTestId('lista-lancamentos').innerText());
   confere('Filtro "Receitas" mostra só o salário', lista.includes('1 lançamento') && lista.includes('Salário'));
   await page.getByRole('radio', { name: 'Todos' }).click();
@@ -164,6 +165,7 @@ async function lancar(page, { tipo = 'Gastei', categoria, sub, valor, descricao,
   confere('Busca sem resultado mostra mensagem clara', await page.getByText('Nenhum lançamento encontrado com esses filtros.').isVisible());
   await page.getByRole('button', { name: 'Limpar filtros' }).click();
   await page.getByLabel('Categoria').selectOption({ label: 'Alimentação' });
+await page.getByTestId('lista-lancamentos').filter({ hasText: '2 lançamentos' }).waitFor({ timeout: 5000 }).catch(() => {});
   lista = nb(await page.getByTestId('lista-lancamentos').innerText());
   confere('Filtro por categoria (Alimentação = 2 lançamentos)', lista.includes('2 lançamentos'));
   await page.getByRole('button', { name: 'Limpar filtros' }).click();

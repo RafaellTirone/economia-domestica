@@ -35,6 +35,8 @@ const navegador = await playwright.chromium.launch();
 
   // Navegação pelo menu inferior
   await page.locator('nav.fixed').getByRole('link', { name: 'Dívidas' }).click();
+  await page.waitForURL('**/dividas', { timeout: 5000 }).catch(() => {});
+  await page.getByRole('heading', { level: 1, name: 'Dívidas' }).waitFor({ timeout: 5000 }).catch(() => {});
   confere('Celular: menu leva para Dívidas', page.url().endsWith('/dividas') && (await page.getByRole('heading', { level: 1 }).innerText()) === 'Dívidas');
   await page.getByRole('link', { name: 'Novo lançamento' }).click();
   confere('Celular: botão "+" leva para Novo lançamento', page.url().endsWith('/lancar'));
@@ -116,6 +118,8 @@ const navegador = await playwright.chromium.launch();
   const topo = page.locator('header.hidden.md\\:block');
   for (const [nome, rota] of [['Lançamentos', '/lancamentos'], ['Dívidas', '/dividas'], ['Cofrinhos', '/cofrinhos'], ['Desejos', '/desejos'], ['Relatórios', '/relatorios'], ['Visão geral', '/']]) {
     await topo.getByRole('link', { name: nome, exact: true }).click();
+    await page.waitForURL((u) => new URL(u).pathname === rota, { timeout: 5000 }).catch(() => {});
+    await topo.locator(`a[aria-current="page"]`).filter({ hasText: nome }).waitFor({ timeout: 5000 }).catch(() => {});
     const atual = await topo.getByRole('link', { name: nome, exact: true }).getAttribute('aria-current');
     confere(`Notebook: menu "${nome}" abre ${rota} e fica marcado`, new URL(page.url()).pathname === rota && atual === 'page');
   }

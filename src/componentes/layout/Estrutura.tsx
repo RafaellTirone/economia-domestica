@@ -1,4 +1,4 @@
-import { BarChart3, Ellipsis, Heart, Landmark, PieChart, PiggyBank, Plus, Settings, ShoppingBag, X } from 'lucide-react';
+import { BarChart3, Ellipsis, Gauge, ListChecks, Heart, Landmark, PieChart, PiggyBank, Plus, Settings, ShoppingBag, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
@@ -9,6 +9,8 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 const PRINCIPAIS = [
   { para: '/', texto: 'Visão geral', curto: 'Visão', Icone: PieChart },
   { para: '/lancamentos', texto: 'Lançamentos', curto: 'Lançamentos', Icone: ShoppingBag },
+  { para: '/contas', texto: 'Contas do mês', curto: 'Contas', Icone: ListChecks },
+  { para: '/orcamento', texto: 'Orçamento', curto: 'Orçamento', Icone: Gauge },
   { para: '/dividas', texto: 'Dívidas', curto: 'Dívidas', Icone: Landmark },
   { para: '/cofrinhos', texto: 'Cofrinhos', curto: 'Cofrinhos', Icone: PiggyBank },
   { para: '/desejos', texto: 'Desejos', curto: 'Desejos', Icone: Heart },
@@ -41,10 +43,15 @@ export function Estrutura({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh bg-fundo">
+      {import.meta.env.VITE_PREVIA === 'sim' && (
+        <p className="m-0 bg-alerta-fundo px-4 py-2 text-center text-xs font-bold text-alerta-texto">
+          Versão de teste: os dados ficam só neste navegador e não passam para o app publicado.
+        </p>
+      )}
       <a href="#conteudo" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-cartao focus:p-3">Pular para o conteúdo</a>
 
       {/* Topo — notebook */}
-      <header className="hidden border-b border-borda bg-fundo md:block">
+      <header className="hidden border-b border-borda bg-fundo md:block print:hidden">
         <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-4 gap-y-2 px-6 py-3">
           <Logo />
           <nav aria-label="Menu principal" className="flex flex-1 flex-wrap gap-0.5">
@@ -65,19 +72,19 @@ export function Estrutura({ children }: { children: ReactNode }) {
       </header>
 
       {/* Topo — celular */}
-      <header className="flex items-center px-4 pt-3 md:hidden"><Logo /></header>
+      <header className="flex items-center px-4 pt-3 md:hidden print:hidden"><Logo /></header>
 
       <main id="conteudo" className={`mx-auto max-w-[1240px] px-4 pt-4 md:px-6 md:pb-12 md:pt-6 ${telaDeLancar ? 'pb-6' : 'pb-[calc(104px+env(safe-area-inset-bottom))]'}`}>{children}</main>
 
       {/* Menu inferior — celular: encostado na borda de baixo, na largura toda.
           A folga do iPhone (barra de gestos) é respeitada com safe-area-inset-bottom. */}
-      <nav aria-label="Menu principal" hidden={telaDeLancar} className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-around rounded-t-[22px] bg-menu pt-2 pb-[max(8px,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(30,27,46,0.18)] md:hidden">
+      <nav aria-label="Menu principal" hidden={telaDeLancar} className="fixed inset-x-0 bottom-0 z-30 print:hidden flex items-center justify-around rounded-t-[22px] bg-menu pt-2 pb-[max(8px,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(30,27,46,0.18)] md:hidden">
         <ItemMenuCelular {...PRINCIPAIS[0]} />
-        <ItemMenuCelular {...PRINCIPAIS[2]} />
+        <ItemMenuCelular {...PRINCIPAIS.find((p) => p.para === '/dividas')!} />
         <Link to="/lancar" aria-label="Novo lançamento" className="flex h-[52px] w-[52px] items-center justify-center rounded-2xl bg-primaria text-white">
           <Plus size={26} strokeWidth={2.6} aria-hidden="true" />
         </Link>
-        <ItemMenuCelular {...PRINCIPAIS[3]} />
+        <ItemMenuCelular {...PRINCIPAIS.find((p) => p.para === '/cofrinhos')!} />
         <button type="button" onClick={() => setMaisAberto(true)} aria-haspopup="dialog" aria-expanded={maisAberto}
           className="flex min-h-12 min-w-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold text-menu-texto">
           <Ellipsis size={22} aria-hidden="true" />Mais

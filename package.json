@@ -11,16 +11,19 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "test": "vitest run",
-    "test:e2e": "node tests/e2e.mjs && node tests/e2e-lancamentos.mjs"
+    "test:e2e": "node tests/e2e.mjs && node tests/e2e-lancamentos.mjs && node tests/e2e-dividas.mjs && node tests/e2e-cofrinhos.mjs && node tests/e2e-desejos.mjs && node tests/e2e-relatorios.mjs && node tests/e2e-comprovantes.mjs && node tests/e2e-backup.mjs && node tests/e2e-pwa.mjs && node tests/e2e-orcamento.mjs && node tests/e2e-contas.mjs && node tests/e2e-exemplos.mjs && node tests/e2e-calculadora.mjs",
+    "build:previa": "tsc -b && vite build --mode previa --base ./ --outDir dist-previa && node scripts/gerar-previa.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "5.1.1",
     "dexie": "4.0.10",
     "dexie-react-hooks": "1.1.7",
     "lucide-react": "0.460.0",
+    "pdfjs-dist": "4.10.38",
+    "qrcode-generator": "1.4.4",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-router-dom": "6.28.0"
+    "react-router-dom": "7.18.4"
   },
   "devDependencies": {
     "@tailwindcss/vite": "4.1.11",

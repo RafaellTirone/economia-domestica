@@ -165,3 +165,72 @@ export function proximoDiaUtil(iso: DataISO): DataISO {
   while (!ehDiaUtil(d)) d = adicionarDias(d, 1);
   return d;
 }
+
+// ---------- Datas escritas por extenso ----------
+
+const MESES_EXTENSO: Record<string, number> = {
+  janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
+};
+
+/** "10 de março de 2025" → '2025-03-10'. Devolve null se não for uma data válida. */
+export function lerDataPorExtenso(texto: string): DataISO | null {
+  const m = texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().match(/(\d{1,2})(?:º|°)?\s+de\s+([a-z]+)\s+de\s+(\d{4})/);
+  if (!m || !MESES_EXTENSO[m[2]]) return null;
+  return lerData(`${m[1]}/${MESES_EXTENSO[m[2]]}/${m[3]}`);
+}
+
+// ---------- Dia do pagamento do salário ----------
+
+/**
+ * Como o salário é pago:
+ * - 'dia': num dia fixo do mês (se cair em fim de semana/feriado, a empresa costuma pagar no dia útil anterior);
+ * - 'dia-util': no N-ésimo dia útil (ex.: 5º dia útil — regra da CLT, que conta o sábado como dia útil);
+ * - 'ultimo-util': no último dia útil do mês.
+ */
+export type RegraSalario = { tipo: 'dia'; dia: number } | { tipo: 'dia-util'; numero: number } | { tipo: 'ultimo-util' };
+
+/** Data em que o salário cai num mês. */
+export function diaDoSalario(ano: number, mes: number, regra: RegraSalario): DataISO {
+  if (regra.tipo === 'dia') {
+    let d = montarData(ano, mes, Math.min(regra.dia, diasNoMes(ano, mes)));
+    while (!ehDiaUtil(d)) d = adicionarDias(d, -1); // fim de semana/feriado: paga antes
+    return d;
+  }
+  if (regra.tipo === 'ultimo-util') {
+    let d = montarData(ano, mes, diasNoMes(ano, mes));
+    while (!ehDiaUtil(d)) d = adicionarDias(d, -1);
+    return d;
+  }
+  // N-ésimo dia útil pela CLT: segunda a sábado, sem domingos e feriados
+  const feriados = feriadosDoAno(ano);
+  let contagem = 0;
+  for (let dia = 1; dia <= diasNoMes(ano, mes); dia++) {
+    const d = montarData(ano, mes, dia);
+    if (diaDaSemana(d) !== 0 && !feriados.has(d)) contagem++;
+    if (contagem === regra.numero) return d;
+  }
+  return montarData(ano, mes, diasNoMes(ano, mes));
+}
+
+/** Descrição da regra para mostrar na tela ("todo dia 5", "5º dia útil"). */
+export function descreverRegraSalario(regra: RegraSalario): string {
+  if (regra.tipo === 'dia') return `todo dia ${regra.dia}`;
+  if (regra.tipo === 'ultimo-util') return 'no último dia útil do mês';
+  return `no ${regra.numero}º dia útil do mês`;
+}
+
+// ---------- Momentos (data + hora) ----------
+// Registros como "backup feito em" são guardados como instante (ISO em UTC).
+// Para mostrar, convertem-se para o horário do aparelho — senão 21h de Brasília viraria o dia seguinte.
+
+/** Data local (AAAA-MM-DD) de um instante ISO. */
+export function dataLocalDeInstante(instante: string): DataISO {
+  return hojeISO(new Date(instante));
+}
+
+/** "31/10/2026 às 19:46" no horário do aparelho. */
+export function formatarDataHora(instante: string): string {
+  const d = new Date(instante);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${formatarData(hojeISO(d))} às ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}

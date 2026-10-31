@@ -49,9 +49,11 @@ describe('parcelado no cartão: cada parcela no mês dela', () => {
     expect(l.parcela).toBeUndefined();
     expect(l.valor).toBe(7200);
   });
-  it('receita nunca fica marcada como fixa de despesa', () => {
-    const [l] = montarLancamentos(dados({ tipo: 'receita', fixa: true, forma: 'pix' }));
-    expect(l.fixa).toBe(false);
+  it('receita pode se repetir (salário); compra parcelada nunca é fixa', () => {
+    const [l] = montarLancamentos(dados({ tipo: 'receita', fixa: true }));
+    expect(l.fixa).toBe(true);
+    const parcelas = montarLancamentos(dados({ fixa: true, forma: 'credito', parcelas: 3 }));
+    expect(parcelas.every((p) => !p.fixa)).toBe(true);
   });
 });
 

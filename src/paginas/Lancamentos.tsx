@@ -1,4 +1,4 @@
-import { Plus, Search } from 'lucide-react';
+import { PiggyBank, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CampoData } from '../componentes/ui/CampoData';
@@ -140,15 +140,17 @@ export function Lancamentos() {
 export function ItemLancamento({ l, categoria }: { l: Lancamento; categoria?: Categoria }) {
   const sub = categoria?.subcategorias.find((s) => s.id === l.subcategoriaId)?.nome;
   const titulo = l.descricao || sub || categoria?.nome || 'Lançamento';
-  const detalhes = [categoria ? (sub ? `${categoria.nome} › ${sub}` : categoria.nome) : 'Sem categoria', NOMES_FORMAS[l.forma]];
+  const cofrinho = l.tipo === 'guardado';
+  const detalhes = cofrinho ? ['Cofrinho · não conta como despesa'] : [categoria ? (sub ? `${categoria.nome} › ${sub}` : categoria.nome) : 'Sem categoria', NOMES_FORMAS[l.forma]];
   if (l.parcela) detalhes.push(`parcela ${l.parcela.numero} de ${l.parcela.total}`);
   if (l.fixa) detalhes.push('fixa');
   const sinal = l.tipo === 'receita' ? l.valor : -l.valor;
   return (
     <li className="border-b border-borda last:border-b-0">
-      <Link to={`/lancar/${l.id}`} className="flex min-h-16 items-center gap-3 px-3 py-2.5 text-tinta no-underline hover:bg-fundo">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: categoria?.cor ?? '#8a8984' }}>
-          {categoria && <IconeCategoria nome={categoria.icone} tamanho={18} />}
+      {/* Depósitos/saques de cofrinho são editados no próprio cofrinho */}
+      <Link to={cofrinho ? '/cofrinhos' : `/lancar/${l.id}`} className="flex min-h-16 items-center gap-3 px-3 py-2.5 text-tinta no-underline hover:bg-fundo">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: cofrinho ? 'var(--color-primaria)' : categoria?.cor ?? '#8a8984' }}>
+          {cofrinho ? <PiggyBank size={18} aria-hidden="true" /> : categoria && <IconeCategoria nome={categoria.icone} tamanho={18} />}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate font-bold">{titulo}</span>

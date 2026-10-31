@@ -85,3 +85,34 @@ describe('planilha (CSV)', () => {
     expect(linhas[2]).toEqual(['05/10/2026', 'Despesa', 'Aluguel', 'Moradia', '', 'Pix', 'Pago', 1650_00]);
   });
 });
+
+describe('juros pagos', async () => {
+  const { resumirEmprestimo } = await import('./emprestimos');
+  const { jurosPagos } = await import('./relatorios');
+  const emp = {
+    id: 1, nome: 'Pessoal', instituicao: '', numeroContrato: '', tipo: 'pessoal' as const, valorEmprestado: 500000, numeroParcelas: 12, valorParcela: 51741,
+    taxaJuros: 3.5, periodoTaxa: 'mes' as const, cetAnual: null, sistema: 'price' as const, dataContratacao: null, dataPrimeiraParcela: '2026-07-15',
+    multaAtraso: 2, jurosMora: 1, periodoMora: 'mes' as const, trechos: {}, termosConferidos: true, contratoArquivoId: null, criadoEm: '',
+  };
+  const pag = (n: number, data: string, valor = 51741) => ({ id: n, emprestimoId: 1, numeroParcela: n, dataPagamento: data, valorPago: valor, lancamentoId: null });
+  const res = resumirEmprestimo(emp, [pag(1, '2026-07-15'), pag(2, '2026-08-15'), pag(3, '2026-09-20', 52900)], '2026-10-20');
+
+  it('soma os juros das parcelas pagas no mês e separa a multa por atraso', () => {
+    const jul = jurosPagos([res], '2026-07-01', '2026-07-31');
+    expect(jul.parcelas).toBe(1);
+    expect(jul.juros).toBe(17500); // 3,5% de R$ 5.000,00
+    expect(jul.encargos).toBe(0);
+    const set = jurosPagos([res], '2026-09-01', '2026-09-30');
+    expect(set.encargos).toBe(52900 - 51741);
+    expect(set.total).toBe(set.juros + set.encargos);
+  });
+
+  it('no ano soma tudo e os juros caem a cada parcela (Price)', () => {
+    const ano = jurosPagos([res], '2026-01-01', '2026-12-31');
+    expect(ano.parcelas).toBe(3);
+    const [p1, p2, p3] = res.parcelas;
+    expect(p1.juros! > p2.juros! && p2.juros! > p3.juros!).toBe(true);
+    expect(ano.juros).toBe(p1.juros! + p2.juros! + p3.juros!);
+    expect(ano.porEmprestimo[0]).toMatchObject({ nome: 'Pessoal', parcelas: 3 });
+  });
+});

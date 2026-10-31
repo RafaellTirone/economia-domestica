@@ -1,6 +1,6 @@
 // Auditoria dos dados de exemplo (carregar, apagar só eles) e do "Apagar tudo".
 // Uso: npm run build && npm run test:e2e
-import { confere, encerrar, iniciarServidor, nb, playwright, verificarTela } from './apoio.mjs';
+import { confere, encerrar, hoje, iniciarServidor, nb, playwright, verificarTela } from './apoio.mjs';
 
 const URL_APP = await iniciarServidor(4190);
 const navegador = await playwright.chromium.launch();
@@ -39,6 +39,14 @@ confere('Contas que se repetem: 5 (salário, aluguel, água, luz, internet)', (a
 await page.goto(`${URL_APP}/desejos`);
 await page.getByText('Notebook para estudar').first().waitFor();
 confere('Desejos mostra o "Notebook para estudar"', true);
+
+// Relatórios: juros pagos do empréstimo de exemplo
+await page.goto(`${URL_APP}/relatorios`);
+await page.getByRole('radio', { name: 'Anual' }).click();
+const juros = nb(await page.getByTestId('juros-pagos').innerText());
+confere('Relatório anual mostra os juros pagos no empréstimo', hoje.getMonth() < 3 || /só de juros, em \d+ parcela/.test(juros), juros);
+await page.getByRole('radio', { name: 'Mensal' }).click();
+confere('Relatório mensal tem o bloco "Juros pagos no mês"', await page.getByRole('region', { name: 'Juros pagos no mês' }).isVisible());
 
 // 3. Um lançamento da pessoa sobrevive a "apagar só os exemplos"
 await page.goto(`${URL_APP}/lancar`);

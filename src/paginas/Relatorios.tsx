@@ -2,11 +2,13 @@ import { ChevronLeft, ChevronRight, FileSpreadsheet, Printer } from 'lucide-reac
 import { useMemo, useState, type ReactNode } from 'react';
 import { BarrasHorizontais, BarrasReceitasDespesas, BarrasSimples, ColunasSaldo, Linhas, Rosca, SeletorGrafico, TabelaValores } from '../componentes/graficos/Graficos';
 import { useGraficoPreferido } from '../servicos/preferencias';
-import { useCategorias, useCofrinhos, useTodosLancamentos } from '../hooks/useDados';
+import { useCategorias, useCofrinhos, useEmprestimos, useTodosLancamentos } from '../hooks/useDados';
+import { useRegraSalario } from '../servicos/configuracoes';
+import { resumirEmprestimo } from '../servicos/emprestimos';
 import { resumirCofrinho } from '../servicos/cofrinhos';
-import { baixarArquivo, gerarCsv, linhasLancamentos, relatorioAnual, relatorioMensal, relatorioSemanal, type FatiaCategoria } from '../servicos/relatorios';
+import { baixarArquivo, gerarCsv, jurosPagos, linhasLancamentos, relatorioAnual, relatorioMensal, relatorioSemanal, type FatiaCategoria, type JurosPagos } from '../servicos/relatorios';
 import type { Categoria, Lancamento } from '../tipos';
-import { adicionarDias, formatarData, formatarDiaMes, formatarMesAno, hojeISO, partesDaData } from '../utils/datas';
+import { adicionarDias, formatarData, formatarDiaMes, formatarMesAno, hojeISO, limitesDoMes, partesDaData } from '../utils/datas';
 import { formatarMoeda, formatarMoedaComSinal, formatarPercentual } from '../utils/moeda';
 
 // Relatórios semanal, mensal e anual, com gráficos, tabelas, planilha (CSV/Excel) e PDF (imprimir).
@@ -28,6 +30,11 @@ export function Relatorios() {
   const semanal = useMemo(() => (lancamentos && categorias ? relatorioSemanal(lancamentos, categorias, diaSemana) : null), [lancamentos, categorias, diaSemana]);
   const mensal = useMemo(() => (lancamentos && categorias ? relatorioMensal(lancamentos, categorias, mesRef.ano, mesRef.mes) : null), [lancamentos, categorias, mesRef]);
   const anual = useMemo(() => (lancamentos && categorias ? relatorioAnual(lancamentos, categorias, ano) : null), [lancamentos, categorias, ano]);
+  const dadosEmprestimos = useEmprestimos();
+  const regraSalario = useRegraSalario();
+  const resumosEmp = useMemo(() => (dadosEmprestimos ?? []).map((d) => resumirEmprestimo(d.emprestimo, d.pagamentos, hoje, regraSalario)), [dadosEmprestimos, hoje, regraSalario]);
+  const jurosMes = useMemo(() => { const { inicio, fim } = limitesDoMes(mesRef.ano, mesRef.mes); return jurosPagos(resumosEmp, inicio, fim); }, [resumosEmp, mesRef]);
+  const jurosAno = useMemo(() => jurosPagos(resumosEmp, `${ano}-01-01`, `${ano}-12-31`), [resumosEmp, ano]);
   if (!semanal || !mensal || !anual || !categorias || !cofrinhos) return <p className="text-suave">Carregando…</p>;
 
   const moverMes = (d: number) => setMesRef(({ ano: a, mes: m }) => { const t = a * 12 + m - 1 + d; return { ano: Math.floor(t / 12), mes: (t % 12) + 1, dia: 1 }; });
@@ -108,8 +115,9 @@ export function Relatorios() {
           <Bloco titulo="Cumprimento do orçamento">
             {mensal.orcamento.length ? (
               <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">{mensal.orcamento.map((o) => <li key={o.categoria.id}>{o.categoria.nome}: {formatarMoeda(o.gasto)} de {formatarMoeda(o.limite)} ({formatarPercentual(o.percentual, 0)}) {o.percentual > 100 ? '— estourou' : o.percentual >= 80 ? '— atenção' : '— ok'}</li>)}</ul>
-            ) : <p className="m-0 text-sm text-suave">Os limites por categoria chegam na etapa de orçamento; quando definidos, aparecem aqui.</p>}
+            ) : <p className="m-0 text-sm text-suave">Nenhuma categoria com limite. Defina os limites na tela Orçamento.</p>}
           </Bloco>
+          {resumosEmp.length > 0 && <Bloco titulo="Juros pagos no mês"><BlocoJuros j={jurosMes} periodo="neste mês" /></Bloco>}
           <Bloco titulo="Maiores despesas"><TabelaLancamentos lista={mensal.maioresDespesas} categorias={categorias} /></Bloco>
           <Bloco titulo="Todos os lançamentos do mês"><TabelaLancamentos lista={mensal.lancamentos} categorias={categorias} /></Bloco>
         </>
@@ -132,6 +140,7 @@ export function Relatorios() {
             </table></div>
           </Bloco>
           <Bloco titulo="Gastos por categoria no ano">{anual.categorias.length ? <GraficoCategorias rotulo="Gastos por categoria no ano" dados={fatiasParaGrafico(anual.categorias)} /> : <Vazio />}</Bloco>
+          {resumosEmp.length > 0 && <Bloco titulo="Juros pagos no ano"><BlocoJuros j={jurosAno} periodo={`em ${ano}`} /></Bloco>}
           <Bloco titulo="Maiores despesas do ano"><TabelaLancamentos lista={anual.maioresDespesas} categorias={categorias} /></Bloco>
           <Bloco titulo="Evolução das metas (cofrinhos)">
             {cofrinhos.length ? (
@@ -156,6 +165,25 @@ function Numeros({ itens }: { itens: [string, string][] }) {
 
 function Bloco({ titulo, children }: { titulo: string; children: ReactNode }) {
   return <section aria-label={titulo} className="flex flex-col gap-3 rounded-[22px] border border-borda bg-cartao p-4 break-inside-avoid md:p-5"><h2 className="m-0 text-base font-extrabold">{titulo}</h2>{children}</section>;
+}
+
+/** Quanto das parcelas de empréstimo pagas foi só juros (e multa por atraso). */
+function BlocoJuros({ j, periodo }: { j: JurosPagos; periodo: string }) {
+  if (!j.parcelas) return <p className="m-0 text-sm text-suave" data-testid="juros-pagos">Nenhuma parcela de empréstimo paga {periodo}.</p>;
+  return (
+    <div className="flex flex-col gap-2 text-sm" data-testid="juros-pagos">
+      <p className="m-0 text-base">
+        {periodo.charAt(0).toUpperCase() + periodo.slice(1)} você pagou <strong>{formatarMoeda(j.juros)}</strong> só de juros, em {j.parcelas} {j.parcelas === 1 ? 'parcela' : 'parcelas'}
+        {j.encargos > 0 && <>, e mais <strong className="text-perigo-texto">{formatarMoeda(j.encargos)}</strong> de multa e juros por atraso</>}.
+      </p>
+      {j.porEmprestimo.length > 1 && (
+        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+          {j.porEmprestimo.map((e) => <li key={e.nome}>{e.nome}: {formatarMoeda(e.juros + e.encargos)} ({e.parcelas} {e.parcelas === 1 ? 'parcela' : 'parcelas'})</li>)}
+        </ul>
+      )}
+      <p className="m-0 text-suave">Esse valor não diminuiu a dívida. Pagar em dia evita multa, e adiantar parcelas corta juros.</p>
+    </div>
+  );
 }
 
 function Vazio() {

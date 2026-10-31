@@ -1,4 +1,5 @@
 import type { Categoria, Centavos, DataISO, Lancamento } from '../tipos';
+import type { ResumoEmprestimo } from './emprestimos';
 import { adicionarDias, formatarData, hojeISO, inicioDaSemana, limitesDoMes, partesDaData } from '../utils/datas';
 
 // Relatórios semanal, mensal e anual + exportação em planilha (CSV que abre no Excel).
@@ -152,4 +153,41 @@ export function baixarArquivo(nome: string, conteudo: string, tipo = 'text/csv;c
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ---------- Juros pagos ----------
+
+export interface JurosPagos {
+  /** Juros embutidos nas parcelas pagas no período. */
+  juros: Centavos;
+  /** Multa e juros de atraso (o que foi pago acima do valor da parcela). */
+  encargos: Centavos;
+  total: Centavos;
+  parcelas: number;
+  porEmprestimo: { nome: string; juros: Centavos; encargos: Centavos; parcelas: number }[];
+}
+
+/**
+ * Quanto foi pago só de juros (e de multa por atraso) nas parcelas de empréstimo pagas entre
+ * inicio e fim. Consignado descontado do salário conta na data do vencimento.
+ */
+export function jurosPagos(resumos: ResumoEmprestimo[], inicio: DataISO, fim: DataISO): JurosPagos {
+  const r: JurosPagos = { juros: 0, encargos: 0, total: 0, parcelas: 0, porEmprestimo: [] };
+  for (const res of resumos) {
+    const item = { nome: res.emprestimo.nome, juros: 0, encargos: 0, parcelas: 0 };
+    for (const p of res.parcelas) {
+      const data = p.pagamento?.dataPagamento ?? (p.status === 'paga' && p.descontadaDoSalario ? p.vencimentoUtil : null);
+      if (!data || data < inicio || data > fim) continue;
+      item.parcelas++;
+      item.juros += p.juros ?? 0;
+      if (p.pagamento) item.encargos += Math.max(0, p.pagamento.valorPago - p.valor);
+    }
+    if (item.parcelas) {
+      r.porEmprestimo.push(item);
+      r.juros += item.juros; r.encargos += item.encargos; r.parcelas += item.parcelas;
+    }
+  }
+  r.total = r.juros + r.encargos;
+  r.porEmprestimo.sort((a, b) => b.juros + b.encargos - (a.juros + a.encargos));
+  return r;
 }

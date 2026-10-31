@@ -16,12 +16,17 @@ mkdirSync(CAPTURAS, { recursive: true });
 
 // ---------- servidor estático com os cabeçalhos do netlify.toml ----------
 const toml = readFileSync(join(RAIZ, 'netlify.toml'), 'utf8');
-const cabecalhos = Object.fromEntries([...toml.matchAll(/^\s+([A-Za-z-]+) = "(.*)"$/gm)].map((m) => [m[1], m[2]]));
-const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
+// Lê cada bloco [[headers]] com o seu "for" (como o Netlify): "/*" vale para tudo; caminhos exatos sobrepõem
+const blocosCabecalhos = toml.split('[[headers]]').slice(1).map((b) => ({
+  para: (b.match(/for = "([^"]+)"/) || [])[1],
+  valores: Object.fromEntries([...b.matchAll(/^\s+([A-Za-z-]+) = "(.*)"$/gm)].map((m) => [m[1], m[2]])),
+}));
+const cabecalhosPara = (caminho) => Object.assign({}, ...blocosCabecalhos.filter((b) => b.para === '/*' || b.para === caminho).map((b) => b.valores));
+const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
 export const servidor = createServer((req, res) => {
   let arquivo = join(DIST, decodeURIComponent(req.url.split('?')[0]));
   if (!existsSync(arquivo) || statSync(arquivo).isDirectory()) arquivo = join(DIST, 'index.html'); // rotas do app
-  res.writeHead(200, { 'Content-Type': TIPOS[extname(arquivo)] ?? 'application/octet-stream', ...cabecalhos });
+  res.writeHead(200, { 'Content-Type': TIPOS[extname(arquivo)] ?? 'application/octet-stream', ...cabecalhosPara(req.url.split('?')[0]) });
   res.end(readFileSync(arquivo));
 });
 

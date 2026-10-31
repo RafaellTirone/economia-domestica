@@ -20,3 +20,11 @@
     Referrer-Policy = "no-referrer"
     Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=()"
     Strict-Transport-Security = "max-age=63072000; includeSubDomains"
+
+# O modo sem internet (service worker) precisa buscar os arquivos do PRÓPRIO app para guardá-los.
+# Só ele ganha connect-src 'self'; a página continua com connect-src 'none' (não envia nada a ninguém).
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'"
+    Cache-Control = "no-cache"

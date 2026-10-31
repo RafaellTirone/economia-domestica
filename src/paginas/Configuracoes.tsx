@@ -1,6 +1,7 @@
 import { ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { SecaoBackup } from '../componentes/SecaoBackup';
+import { SecaoInstalar } from '../componentes/SecaoInstalar';
 import { EditorSalario } from '../componentes/ui/EditorSalario';
 import { IconeCategoria } from '../componentes/ui/IconeCategoria';
 import { useAvisos } from '../hooks/useAvisos';
@@ -33,7 +34,7 @@ export function Configuracoes() {
             {protecao === 'nao-protegido' && (
               <>
                 <p className="m-0 font-bold">Atenção: o navegador pode apagar os dados se faltar espaço.</p>
-                <p className="m-0 mt-1">No iPhone, instale o app na tela de início (Compartilhar → Adicionar à Tela de Início). Faça backups com frequência.</p>
+                <p className="m-0 mt-1">Instale o app (veja abaixo) e faça backups com frequência.</p>
                 <button type="button" onClick={() => pedirArmazenamentoPersistente().then(setProtecao)}
                   className="mt-3 min-h-11 rounded-xl border border-alerta-texto bg-cartao px-4 font-bold text-alerta-texto">Pedir proteção</button>
               </>
@@ -43,6 +44,8 @@ export function Configuracoes() {
           </div>
         </div>
       </section>
+
+      <SecaoInstalar />
 
       <SecaoBackup />
 

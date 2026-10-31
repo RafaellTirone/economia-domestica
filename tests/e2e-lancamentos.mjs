@@ -230,6 +230,8 @@ await page.getByTestId('lista-lancamentos').filter({ hasText: '2 lançamentos' }
 
   // 14. Envelope leva para a lista filtrada
   await page.getByRole('link', { name: /^Alimentação:/ }).click();
+  await page.waitForURL('**/lancamentos?categoria=*', { timeout: 5000 }).catch(() => {});
+  await page.getByLabel('Categoria').waitFor({ timeout: 5000 }).catch(() => {});
   confere('Tocar no envelope abre os lançamentos daquela categoria', page.url().includes('/lancamentos?categoria=')
     && (await page.getByLabel('Categoria').inputValue()) !== '');
 

@@ -1,5 +1,6 @@
 import { ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { SecaoBackup } from '../componentes/SecaoBackup';
 import { SecaoInstalar } from '../componentes/SecaoInstalar';
 import { EditorSalario } from '../componentes/ui/EditorSalario';
@@ -59,7 +60,7 @@ export function Configuracoes() {
 
       <section aria-labelledby="titulo-categorias" className="rounded-[22px] border border-borda bg-cartao p-5">
         <h2 id="titulo-categorias" className="m-0 text-lg font-extrabold">Categorias ({categorias?.length ?? '…'})</h2>
-        <p className="m-0 mt-1 text-sm text-suave">Criar, editar e excluir categorias chega na etapa 4.</p>
+        <p className="m-0 mt-1 text-sm"><Link to="/categorias" className="inline-flex min-h-11 items-center font-bold text-primaria">Criar, editar ou excluir categorias</Link></p>
         {(['despesa', 'receita'] as const).map((tipo) => (
           <div key={tipo} className="mt-4">
             <h3 className="m-0 text-sm font-bold text-suave">{tipo === 'despesa' ? 'Despesas' : 'Receitas'}</h3>

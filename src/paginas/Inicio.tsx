@@ -49,7 +49,7 @@ export function Inicio() {
       <section aria-labelledby="titulo-envelopes">
         <div className="mb-2.5 flex items-baseline">
           <h2 id="titulo-envelopes" className="m-0 text-lg font-extrabold">Envelopes do mês</h2>
-          <span className="ml-auto text-xs text-suave">toque para ver os lançamentos</span>
+          <Link to="/orcamento" className="ml-auto inline-flex min-h-11 items-center text-sm font-bold text-primaria no-underline">Definir limites</Link>
         </div>
         <ul className="m-0 grid list-none grid-cols-2 gap-2.5 p-0 sm:grid-cols-3 lg:grid-cols-4">
           {resumo.porCategoria.map((rc) => <Envelope key={rc.categoria.id} {...rc} />)}

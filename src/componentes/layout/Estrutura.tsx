@@ -1,4 +1,4 @@
-import { BarChart3, Ellipsis, Heart, Landmark, PieChart, PiggyBank, Plus, Settings, ShoppingBag, X } from 'lucide-react';
+import { BarChart3, Ellipsis, Gauge, Heart, Landmark, PieChart, PiggyBank, Plus, Settings, ShoppingBag, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 const PRINCIPAIS = [
   { para: '/', texto: 'Visão geral', curto: 'Visão', Icone: PieChart },
   { para: '/lancamentos', texto: 'Lançamentos', curto: 'Lançamentos', Icone: ShoppingBag },
+  { para: '/orcamento', texto: 'Orçamento', curto: 'Orçamento', Icone: Gauge },
   { para: '/dividas', texto: 'Dívidas', curto: 'Dívidas', Icone: Landmark },
   { para: '/cofrinhos', texto: 'Cofrinhos', curto: 'Cofrinhos', Icone: PiggyBank },
   { para: '/desejos', texto: 'Desejos', curto: 'Desejos', Icone: Heart },
@@ -78,11 +79,11 @@ export function Estrutura({ children }: { children: ReactNode }) {
           A folga do iPhone (barra de gestos) é respeitada com safe-area-inset-bottom. */}
       <nav aria-label="Menu principal" hidden={telaDeLancar} className="fixed inset-x-0 bottom-0 z-30 print:hidden flex items-center justify-around rounded-t-[22px] bg-menu pt-2 pb-[max(8px,env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(30,27,46,0.18)] md:hidden">
         <ItemMenuCelular {...PRINCIPAIS[0]} />
-        <ItemMenuCelular {...PRINCIPAIS[2]} />
+        <ItemMenuCelular {...PRINCIPAIS.find((p) => p.para === '/dividas')!} />
         <Link to="/lancar" aria-label="Novo lançamento" className="flex h-[52px] w-[52px] items-center justify-center rounded-2xl bg-primaria text-white">
           <Plus size={26} strokeWidth={2.6} aria-hidden="true" />
         </Link>
-        <ItemMenuCelular {...PRINCIPAIS[3]} />
+        <ItemMenuCelular {...PRINCIPAIS.find((p) => p.para === '/cofrinhos')!} />
         <button type="button" onClick={() => setMaisAberto(true)} aria-haspopup="dialog" aria-expanded={maisAberto}
           className="flex min-h-12 min-w-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold text-menu-texto">
           <Ellipsis size={22} aria-hidden="true" />Mais

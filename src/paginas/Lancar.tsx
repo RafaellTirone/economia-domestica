@@ -6,6 +6,7 @@ import { IconeCategoria } from '../componentes/ui/IconeCategoria';
 import { NOMES_FORMAS } from '../componentes/ui/rotulos';
 import { banco } from '../db/banco';
 import { useAvisos } from '../hooks/useAvisos';
+import { alertaOrcamento, gastoDaCategoriaNoMes } from '../servicos/orcamento';
 import { useCategorias, useLancamento, useTodosLancamentos } from '../hooks/useDados';
 import {
   atualizarLancamento, criarLancamento, descricoesFrequentes, dividirEmParcelas, excluirLancamento, LIMITES,
@@ -151,7 +152,17 @@ export function Lancar() {
       const texto = dados.parcelas > 1
         ? `${nome} de ${formatarMoeda(dados.valor)} salva em ${dados.parcelas}x.`
         : `${nome} de ${formatarMoeda(dados.valor)} salva.`;
-      avisar(texto, { rotulo: 'Desfazer', executar: () => void banco.lancamentos.bulkDelete(ids) });
+      // Orçamento: avisa se este gasto fez a categoria chegar a 80% ou passar do limite do mês
+      let alerta: string | null = null;
+      const cat = categorias?.find((c) => c.id === dados.categoriaId);
+      if (tipo === 'despesa' && cat?.limiteMensal) {
+        const novos = (await banco.lancamentos.bulkGet(ids)).filter((l) => l !== undefined);
+        const mes = novos[0]?.data.slice(0, 7);
+        const desteMes = novos.filter((l) => l.data.slice(0, 7) === mes).reduce((t, l) => t + l.valor, 0);
+        const depois = mes ? await gastoDaCategoriaNoMes(cat.id!, novos[0].data) : 0;
+        alerta = alertaOrcamento(cat.nome, cat.limiteMensal, depois - desteMes, depois);
+      }
+      avisar(alerta ? `${texto} ${alerta}` : texto, { rotulo: 'Desfazer', executar: () => void banco.lancamentos.bulkDelete(ids) });
       if (lancarOutro) {
         setValorTexto(''); setDescricao(''); setObservacao(''); setCategoriaId(null); setSubcategoriaId(undefined);
         setParcelas(1); setFixa(false); setSugerida(false); setErros({});

@@ -254,7 +254,9 @@ export async function excluirEmprestimo(id: number): Promise<void> {
 /** Registra o pagamento de uma parcela e lança a despesa na categoria Dívidas. */
 export async function registrarPagamento(e: Emprestimo, numeroParcela: number, valorPago: Centavos, dataPagamento: DataISO): Promise<number> {
   return banco.transaction('rw', banco.pagamentosParcela, banco.lancamentos, banco.categorias, async () => {
-    const dividas = (await banco.categorias.where('nome').equals('Dívidas').first()) ?? (await banco.categorias.where('nome').equals('Outros').first());
+    // Categoria Dívidas (se a pessoa renomeou/excluiu: Outros ou a primeira de despesa)
+    const dividas = (await banco.categorias.where('nome').equals('Dívidas').first()) ?? (await banco.categorias.where('nome').equals('Outros').first())
+      ?? (await banco.categorias.where('tipo').equals('despesa').first());
     const lancamentoId = await banco.lancamentos.add({
       tipo: 'despesa', data: dataPagamento, descricao: `${e.nome} — parcela ${numeroParcela} de ${e.numeroParcelas}`, valor: valorPago,
       categoriaId: dividas!.id!, subcategoriaId: 'parcela-de-emprestimo', forma: 'debito', fixa: false, situacao: 'pago', criadoEm: new Date().toISOString(),

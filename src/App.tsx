@@ -1,6 +1,9 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Estrutura } from './componentes/layout/Estrutura';
 import { CadastroPix } from './paginas/CadastroPix';
+import { CategoriaForm } from './paginas/CategoriaForm';
+import { Categorias } from './paginas/Categorias';
+import { Orcamento } from './paginas/Orcamento';
 import { CofrinhoDetalhe } from './paginas/CofrinhoDetalhe';
 import { CofrinhoForm } from './paginas/CofrinhoForm';
 import { Cofrinhos } from './paginas/Cofrinhos';
@@ -41,6 +44,10 @@ export function App() {
         <Route path="/desejos/:id/editar" element={<DesejoForm />} />
         <Route path="/relatorios" element={<Relatorios />} />
         <Route path="/configuracoes" element={<Configuracoes />} />
+        <Route path="/orcamento" element={<Orcamento />} />
+        <Route path="/categorias" element={<Categorias />} />
+        <Route path="/categorias/nova" element={<CategoriaForm />} />
+        <Route path="/categorias/:id" element={<CategoriaForm />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Estrutura>

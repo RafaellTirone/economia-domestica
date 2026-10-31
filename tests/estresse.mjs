@@ -177,6 +177,73 @@ const acoes = {
     await page.locator('form').getByRole('button', { name: 'Registrar depósito' }).click();
     await page.getByTestId('aviso').first().waitFor({ timeout: 10000 });
   },
+  async definirLimite() {
+    await irPara('/orcamento', 'Orçamento');
+    const campos = page.locator('input[id^="limite-"]');
+    const n = await campos.count();
+    const campo = campos.nth(entre(0, n - 1));
+    passo('mudar o limite de uma categoria');
+    await campo.fill(aleatorio() < 0.2 ? '' : String(entre(100, 3000)));
+    await campo.press('Enter');
+    await page.waitForTimeout(200);
+  },
+  async categoria() {
+    const cats = await ler('categorias');
+    const minhas = cats.filter((c) => c.nome.startsWith('Robô '));
+    if (minhas.length >= 3) {
+      // exclui uma, levando os lançamentos para "Outros"
+      const c = um(minhas);
+      await irPara(`/categorias/${c.id}`, 'Editar categoria');
+      passo(`excluir categoria ${c.nome}`);
+      await page.getByRole('button', { name: 'Excluir categoria' }).click();
+      if (await page.locator('#mover-para').count()) await page.locator('#mover-para').selectOption({ label: c.tipo === 'despesa' ? 'Outros' : 'Outras receitas' });
+      await page.getByRole('button', { name: 'Excluir', exact: true }).click();
+      await page.getByRole('heading', { name: 'Categorias', exact: true }).waitFor({ timeout: 10000 });
+      return;
+    }
+    await irPara('/categorias/nova', 'Nova categoria');
+    passo('criar categoria');
+    await page.locator('#categoria-nome').fill(`Robô ${entre(1, 99999)}`);
+    await page.getByRole('button', { name: /^Cor / }).nth(entre(0, 11)).click();
+    await page.getByRole('button', { name: /^Ícone / }).nth(entre(0, 10)).click();
+    await page.getByRole('button', { name: 'Criar categoria' }).click();
+    await page.getByRole('heading', { name: 'Categorias', exact: true }).waitFor({ timeout: 10000 });
+  },
+  async desejo() {
+    await irPara('/desejos/novo', 'Novo desejo');
+    passo('salvar desejo');
+    await page.locator('#desejo-nome').fill(um(['TV nova', 'Viagem', 'Celular', 'Sofá']));
+    await page.locator('#desejo-preco').fill(String(entre(200, 8000)));
+    await page.getByRole('button', { name: 'Salvar desejo' }).click();
+    await page.getByRole('heading', { name: 'Desejos e planos' }).waitFor({ timeout: 10000 });
+  },
+  async pagarParcela() {
+    const emps = await ler('emprestimos');
+    if (!emps.length) return;
+    await irPara(`/dividas/${um(emps).id}`, null);
+    const botao = page.getByRole('button', { name: /^Registrar pagamento da parcela/ });
+    if (!(await botao.count())) return;
+    passo('registrar pagamento da parcela');
+    await botao.click();
+    await page.getByTestId('aviso').first().waitFor({ timeout: 10000 });
+  },
+  async backup() {
+    const antes = { lancamentos: (await ler('lancamentos')).length, categorias: (await ler('categorias')).length, recorrencias: (await ler('recorrencias')).length };
+    await irPara('/configuracoes', 'Configurações');
+    passo('baixar backup');
+    const [baixado] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Baixar backup' }).click()]);
+    const arquivo = join(SAIDA, 'backup-robo.json');
+    await baixado.saveAs(arquivo);
+    passo('restaurar o backup');
+    await page.locator('#backup-arquivo').setInputFiles(arquivo);
+    await page.locator('#backup-entendi').check();
+    await page.getByRole('button', { name: 'Restaurar backup' }).click();
+    await page.waitForTimeout(1500);
+    await page.goto(URL_APP);
+    await page.getByRole('heading', { name: 'Envelopes do mês' }).waitFor({ timeout: 20000 });
+    const depois = { lancamentos: (await ler('lancamentos')).length, categorias: (await ler('categorias')).length, recorrencias: (await ler('recorrencias')).length };
+    if (JSON.stringify(antes) !== JSON.stringify(depois)) throw new Error(`backup mudou os dados: antes ${JSON.stringify(antes)} depois ${JSON.stringify(depois)}`);
+  },
   async muitosDados() {
     // Simula anos de uso: +2.000 lançamentos espalhados por 5 anos
     await page.evaluate(({ hojeIso }) => new Promise((ok) => {
@@ -196,7 +263,7 @@ const acoes = {
   },
 };
 
-const PESOS = [['lancarDespesa', 30], ['lancarReceita', 6], ['editar', 10], ['excluir', 6], ['ticarConta', 8], ['navegar', 25], ['relatorios', 6], ['calculadoraSozinha', 4], ['recarregar', 3], ['semInternet', 2], ['cofrinho', 3]];
+const PESOS = [['lancarDespesa', 30], ['lancarReceita', 6], ['editar', 10], ['excluir', 6], ['ticarConta', 8], ['navegar', 25], ['relatorios', 6], ['calculadoraSozinha', 4], ['recarregar', 3], ['semInternet', 2], ['cofrinho', 3], ['definirLimite', 3], ['categoria', 2], ['desejo', 2], ['pagarParcela', 2], ['backup', 1]];
 const sortearAcao = () => { const total = PESOS.reduce((s, [, p]) => s + p, 0); let x = aleatorio() * total; for (const [n, p] of PESOS) { if ((x -= p) < 0) return n; } return 'navegar'; };
 
 // ---------------- Conferências ----------------

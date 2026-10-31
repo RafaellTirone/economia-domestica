@@ -14,7 +14,7 @@ import { depositar, desfazerMovimento, resumirCofrinho, valorIncomum } from '../
 import { PinIncorreto } from '../servicos/cofre';
 import { gerarBRCode, lerBRCode, mascararChave } from '../servicos/pix';
 import { abrirChavePix, Bloqueado, tentativasRestantes, useRegistroPix, type DadosPix } from '../servicos/pixSeguro';
-import { formatarData, hojeISO } from '../utils/datas';
+import { dataLocalDeInstante, formatarData, hojeISO } from '../utils/datas';
 import { formatarMoeda, formatarPercentual, lerValor } from '../utils/moeda';
 
 // "Guardar agora": gera um Pix (no próprio aparelho) para a conta de reserva DA pessoa.
@@ -143,7 +143,7 @@ export function GuardarPix() {
           <div className="flex flex-col gap-1.5 rounded-2xl bg-fundo p-3 text-sm" data-testid="destino-pix">
             <p className="m-0 text-xs text-suave">Este Pix envia {formatarMoeda(pix.valor)} para</p>
             <p className="m-0"><strong>{pix.dados.titular} (você)</strong> · {pix.dados.banco}</p>
-            <p className="m-0">Chave {mascararChave(pix.dados.tipo, pix.dados.chave)} · <strong className="text-ok-texto">verificada{pix.dados.verificadaEm ? ` em ${formatarData(pix.dados.verificadaEm.slice(0, 10))}` : ''}</strong></p>
+            <p className="m-0">Chave {mascararChave(pix.dados.tipo, pix.dados.chave)} · <strong className="text-ok-texto">verificada{pix.dados.verificadaEm ? ` em ${formatarData(dataLocalDeInstante(pix.dados.verificadaEm))}` : ''}</strong></p>
             <p className="m-0 flex items-center gap-2">Selo de segurança: <Selo chave={pix.dados.chave} /></p>
             <p className="m-0 text-xs text-suave">É sempre o mesmo selo. Se um dia aparecer outro, não pague.</p>
           </div>

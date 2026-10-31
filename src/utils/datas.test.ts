@@ -96,3 +96,13 @@ describe('dia do pagamento do salário', () => {
     expect(diaDoSalario(2026, 10, { tipo: 'ultimo-util' })).toBe('2026-10-30'); // 31 é sábado
   });
 });
+
+import { dataLocalDeInstante, formatarDataHora } from './datas';
+
+describe('instantes no horário do aparelho', () => {
+  it('converte UTC para o horário local (não usa o dia de Londres)', () => {
+    const instante = new Date(2026, 9, 31, 22, 46).toISOString(); // 22:46 local
+    expect(dataLocalDeInstante(instante)).toBe('2026-10-31');
+    expect(formatarDataHora(instante)).toBe('31/10/2026 às 22:46');
+  });
+});

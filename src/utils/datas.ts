@@ -218,3 +218,19 @@ export function descreverRegraSalario(regra: RegraSalario): string {
   if (regra.tipo === 'ultimo-util') return 'no último dia útil do mês';
   return `no ${regra.numero}º dia útil do mês`;
 }
+
+// ---------- Momentos (data + hora) ----------
+// Registros como "backup feito em" são guardados como instante (ISO em UTC).
+// Para mostrar, convertem-se para o horário do aparelho — senão 21h de Brasília viraria o dia seguinte.
+
+/** Data local (AAAA-MM-DD) de um instante ISO. */
+export function dataLocalDeInstante(instante: string): DataISO {
+  return hojeISO(new Date(instante));
+}
+
+/** "31/10/2026 às 19:46" no horário do aparelho. */
+export function formatarDataHora(instante: string): string {
+  const d = new Date(instante);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${formatarData(hojeISO(d))} às ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}

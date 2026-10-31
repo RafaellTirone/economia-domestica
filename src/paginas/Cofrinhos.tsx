@@ -6,7 +6,7 @@ import { useAvisos } from '../hooks/useAvisos';
 import { useCofrinhos } from '../hooks/useDados';
 import { ONDE_GUARDA, resumirCofrinho, textoPrevisao } from '../servicos/cofrinhos';
 import { apagarChavePix, useRegistroPix } from '../servicos/pixSeguro';
-import { formatarData } from '../utils/datas';
+import { formatarDataHora } from '../utils/datas';
 import { formatarMoeda, formatarPercentual } from '../utils/moeda';
 
 // Lista de cofrinhos (metas de economia) e a situação da chave Pix da reserva.
@@ -49,7 +49,7 @@ export function Cofrinhos() {
             <details className="text-sm">
               <summary className="inline-flex min-h-11 cursor-pointer items-center font-bold text-primaria">Histórico da chave</summary>
               <ul className="m-0 flex list-none flex-col gap-1 p-0 text-suave">
-                {[...registro.historico].reverse().map((h) => <li key={h.em}>{formatarData(h.em.slice(0, 10))} {h.em.slice(11, 16)} — {h.evento}</li>)}
+                {[...registro.historico].reverse().map((h) => <li key={h.em}>{formatarDataHora(h.em)} — {h.evento}</li>)}
               </ul>
             </details>
             <div className="flex flex-wrap gap-2">

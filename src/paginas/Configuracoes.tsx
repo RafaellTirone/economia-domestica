@@ -1,5 +1,6 @@
 import { ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { SecaoBackup } from '../componentes/SecaoBackup';
 import { EditorSalario } from '../componentes/ui/EditorSalario';
 import { IconeCategoria } from '../componentes/ui/IconeCategoria';
 import { useAvisos } from '../hooks/useAvisos';
@@ -41,8 +42,9 @@ export function Configuracoes() {
             {protecao === null && <p className="m-0">Verificando…</p>}
           </div>
         </div>
-        <p className="m-0 mt-3 text-sm text-suave">Backup (exportar e importar arquivo) chega na etapa 11.</p>
       </section>
+
+      <SecaoBackup />
 
       <section aria-labelledby="titulo-salario" className="rounded-[22px] border border-borda bg-cartao p-5">
         <h2 id="titulo-salario" className="m-0 text-lg font-extrabold">Dia do pagamento do salário</h2>

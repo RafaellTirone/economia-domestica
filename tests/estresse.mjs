@@ -24,7 +24,11 @@ const nb = (s) => s.replace(/ /g, ' ');
 
 const URL_APP = await iniciarServidor(4192 + (Number(process.argv[3] ?? 0) % 50));
 const navegador = await playwright.chromium.launch();
-const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 }, locale: 'pt-BR', hasTouch: true, isMobile: true, acceptDownloads: true });
+// Semente par = celular; ímpar = notebook
+const NOTEBOOK = Number(process.argv[3] ?? 0) % 2 === 1;
+const ctx = await navegador.newContext(NOTEBOOK
+  ? { viewport: { width: 1280, height: 900 }, locale: 'pt-BR', acceptDownloads: true }
+  : { viewport: { width: 390, height: 844 }, locale: 'pt-BR', hasTouch: true, isMobile: true, acceptDownloads: true });
 await ctx.addInitScript(() => {
   window.__longas = [];
   try { new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__longas.push(Math.round(e.duration)); }).observe({ type: 'longtask', buffered: true }); } catch { /* sem suporte */ }

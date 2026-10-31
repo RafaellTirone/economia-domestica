@@ -1,6 +1,7 @@
-import { ArrowLeft, Info, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calculator, Info, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Calculadora } from '../componentes/ui/Calculadora';
 import { CampoData } from '../componentes/ui/CampoData';
 import { IconeCategoria } from '../componentes/ui/IconeCategoria';
 import { NOMES_FORMAS } from '../componentes/ui/rotulos';
@@ -54,6 +55,7 @@ export function Lancar() {
   // Conta que se repete: a alteração vale só para este mês ou daqui pra frente?
   const [escopo, setEscopo] = useState<'so-este' | 'proximos'>('so-este');
   const [perguntaExcluir, setPerguntaExcluir] = useState(false);
+  const [calculadoraAberta, setCalculadoraAberta] = useState(false);
   const categoriaManual = useRef(false);
   const pagoManual = useRef(false);
   const carregado = useRef(false);
@@ -278,11 +280,28 @@ export function Lancar() {
         )}
       </fieldset>
 
+      {calculadoraAberta && (
+        <Calculadora inicial={valorCentavos && valorCentavos > 0 ? valorCentavos : null} categoria={categoria} subcategoriaId={subcategoriaId}
+          aoEscolherSub={setSubcategoriaId} aoFechar={() => setCalculadoraAberta(false)}
+          aoFinalizar={(c) => {
+            // O resultado vai para o valor do lançamento (na categoria/detalhe escolhidos)
+            setValorTexto(paraCampo(c));
+            setErros((x) => ({ ...x, valor: undefined }));
+            setCalculadoraAberta(false);
+            document.getElementById('campo-valor')?.focus();
+          }} />
+      )}
+
       {/* 2. Valor e detalhes */}
       <section aria-label="Valor e detalhes" className="flex flex-col gap-4 rounded-[22px] border border-borda bg-cartao p-4 md:p-5">
         <p className="m-0 text-sm font-bold text-suave">2 · Quanto e como</p>
         <div>
-          <label htmlFor="campo-valor" className="text-sm font-bold">Valor</label>
+          <div className="flex items-center">
+            <label htmlFor="campo-valor" className="flex-1 text-sm font-bold">Valor</label>
+            <button type="button" onClick={() => setCalculadoraAberta(true)} className="flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-sm font-bold text-primaria-escura hover:bg-primaria-clara">
+              <Calculator size={18} aria-hidden="true" />Calculadora
+            </button>
+          </div>
           <div className={`mt-1 flex items-center gap-2 rounded-2xl border-2 px-3 ${erros.valor ? 'border-status-perigo' : 'border-borda-forte focus-within:border-primaria'}`}>
             <span className="text-2xl font-extrabold text-suave" aria-hidden="true">R$</span>
             <input id="campo-valor" inputMode="decimal" autoComplete="off" placeholder="0,00" value={valorTexto}

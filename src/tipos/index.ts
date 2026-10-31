@@ -130,6 +130,8 @@ export interface Emprestimo {
   contratoArquivoId: number | null;
   observacao?: string;
   criadoEm: string;
+  /** Dados de exemplo (podem ser apagados de uma vez). */
+  exemplo?: boolean;
 }
 
 export interface PagamentoParcela {
@@ -140,6 +142,8 @@ export interface PagamentoParcela {
   valorPago: Centavos;
   /** Lançamento de despesa criado junto (categoria Dívidas). */
   lancamentoId: number | null;
+  /** Dados de exemplo (podem ser apagados de uma vez). */
+  exemplo?: boolean;
 }
 
 /** Arquivo guardado no aparelho (ex.: PDF do contrato). */
@@ -169,6 +173,8 @@ export interface Cofrinho {
   /** Quanto pretende guardar por mês (opcional, para a previsão). */
   depositoMensal: Centavos | null;
   criadoEm: string;
+  /** Dados de exemplo (podem ser apagados de uma vez). */
+  exemplo?: boolean;
 }
 
 export interface MovimentoCofrinho {
@@ -182,6 +188,8 @@ export interface MovimentoCofrinho {
   lancamentoId: number | null;
   /** Comprovantes (print do Pix, foto do recibo, PDF) guardados no aparelho — ids em "arquivos". */
   comprovantes?: number[];
+  /** Dados de exemplo (podem ser apagados de uma vez). */
+  exemplo?: boolean;
 }
 
 /** Intenção de compra. */
@@ -200,4 +208,6 @@ export interface Desejo {
   cofrinhoId: number | null;
   comprado: boolean;
   criadoEm: string;
+  /** Dados de exemplo (podem ser apagados de uma vez). */
+  exemplo?: boolean;
 }

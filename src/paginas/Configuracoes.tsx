@@ -2,6 +2,7 @@ import { ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SecaoBackup } from '../componentes/SecaoBackup';
+import { SecaoDados } from '../componentes/SecaoDados';
 import { SecaoInstalar } from '../componentes/SecaoInstalar';
 import { EditorSalario } from '../componentes/ui/EditorSalario';
 import { IconeCategoria } from '../componentes/ui/IconeCategoria';
@@ -49,6 +50,7 @@ export function Configuracoes() {
       <SecaoInstalar />
 
       <SecaoBackup />
+      <SecaoDados />
 
       <section aria-labelledby="titulo-salario" className="rounded-[22px] border border-borda bg-cartao p-5">
         <h2 id="titulo-salario" className="m-0 text-lg font-extrabold">Dia do pagamento do salário</h2>

@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Info, OctagonAlert } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, OctagonAlert, Sparkles } from 'lucide-react';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { BarrasReceitasDespesas, ColunasSaldo } from '../componentes/graficos/Graficos';
@@ -8,6 +8,8 @@ import { SeletorMes } from '../componentes/ui/SeletorMes';
 import { useCategorias, useEmprestimos, useLancamentosDoMes, useTodosLancamentos } from '../hooks/useDados';
 import { ItemLancamento } from './Lancamentos';
 import { useMes } from '../hooks/useMes';
+import { useAvisos } from '../hooks/useAvisos';
+import { carregarExemplos } from '../servicos/exemplos';
 import { itensDeAtencao, paraOndeFoi, type ItemAtencao } from '../servicos/atencao';
 import { useUltimoBackup } from '../servicos/backup';
 import { useRegraSalario } from '../servicos/configuracoes';
@@ -27,6 +29,7 @@ export function Inicio() {
   const lancamentos = useLancamentosDoMes(ano, mes);
   const todos = useTodosLancamentos();
   const recorrencias = useRecorrencias();
+  const { avisar } = useAvisos();
   const resumo = useMemo(() => (categorias && lancamentos ? calcularResumo(lancamentos, categorias) : null), [categorias, lancamentos]);
   const divisao = useMemo(() => (categorias && lancamentos ? paraOndeFoi(lancamentos, categorias) : null), [categorias, lancamentos]);
   const contas = useMemo(
@@ -56,6 +59,13 @@ export function Inicio() {
           <div className="mt-4 rounded-2xl bg-primaria-clara p-4 text-sm text-[#2E2860]">
             <p className="m-0 font-bold">Ainda não há lançamentos neste mês.</p>
             <p className="m-0 mt-1">Use o botão <strong>+</strong> para lançar receitas e despesas. A divisão do seu dinheiro aparece aqui.</p>
+            {todos?.length === 0 && (
+              <>
+                <p className="m-0 mt-3">Quer ver como fica antes? Carregue uma casa de exemplo — depois apaga com um toque em Configurações.</p>
+                <button type="button" onClick={() => void carregarExemplos().then(() => avisar('Dados de exemplo carregados. Para apagar: Configurações → Apagar só os dados de exemplo.'))}
+                  className="mt-2 flex min-h-11 items-center gap-2 rounded-xl bg-primaria px-4 font-bold text-white"><Sparkles size={18} aria-hidden="true" />Ver com dados de exemplo</button>
+              </>
+            )}
           </div>
         ) : (
           <dl className="m-0 mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">

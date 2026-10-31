@@ -47,10 +47,15 @@ const ler = (tabela) => page.evaluate((t) => new Promise((ok, falha) => {
   r.onerror = () => falha(r.error);
 }), tabela);
 
+/** O que a ação estava fazendo (vai junto no registro de erro). */
+let detalhe = '';
+const passo = (t) => { detalhe = t; };
+
 /** Navega por dentro do app (sem recarregar), como um toque no menu. */
 async function irPara(caminho, titulo) {
+  passo(`abrir ${caminho} (esperando "${titulo}")`);
   await page.evaluate((c) => { history.pushState({}, '', c); dispatchEvent(new PopStateEvent('popstate')); }, caminho);
-  await page.getByRole('heading', { name: titulo, exact: titulo !== 'Envelopes do mês' }).first().waitFor({ timeout: 15000 });
+  if (titulo) await page.getByRole('heading', { name: titulo, exact: titulo !== 'Envelopes do mês' }).first().waitFor({ timeout: 15000 });
 }
 
 // ---------------- Ações ----------------
@@ -58,9 +63,10 @@ const acoes = {
   async lancarDespesa() {
     await irPara('/lancar', 'Novo lançamento');
     const cat = um(Object.keys(DESPESAS));
+    passo(`categoria ${cat}`);
     await page.getByRole('button', { name: cat, exact: true }).click();
     const sub = DESPESAS[cat].length && aleatorio() < 0.7 ? um(DESPESAS[cat]) : null;
-    if (sub) await page.getByRole('button', { name: sub, exact: true }).click();
+    if (sub) { passo(`detalhe ${sub}`); await page.getByRole('button', { name: sub, exact: true }).click(); }
     const centavos = entre(150, aleatorio() < 0.1 ? 900000 : 60000);
     if (aleatorio() < 0.3) {
       // pela calculadora: duas parcelas somadas
@@ -75,14 +81,19 @@ const acoes = {
     if (forma === 'Crédito' && aleatorio() < 0.3) await page.getByLabel('Parcelas no cartão').selectOption(String(entre(2, 12)));
     else if (aleatorio() < 0.08) await page.getByLabel(/Repete todo mês/).check();
     if (aleatorio() < 0.4) await page.locator('#campo-data').fill(iso(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - entre(-20, 60))));
+    passo('salvar e esperar o aviso');
     await page.locator('form button[type=submit]').click();
     await page.getByTestId('aviso').filter({ hasText: /salva/ }).first().waitFor({ timeout: 10000 });
   },
   async lancarReceita() {
     await irPara('/lancar', 'Novo lançamento');
+    passo('tocar Recebi');
     await page.getByRole('radio', { name: 'Recebi' }).click();
-    await page.getByRole('button', { name: um(RECEITAS), exact: true }).click();
+    const rec = um(RECEITAS);
+    passo(`categoria ${rec}`);
+    await page.getByRole('button', { name: rec, exact: true }).click();
     await page.getByLabel('Valor', { exact: true }).fill(String(entre(50, 8000)));
+    passo('salvar e esperar o aviso');
     await page.locator('form button[type=submit]').click();
     await page.getByTestId('aviso').filter({ hasText: /salva/ }).first().waitFor({ timeout: 10000 });
   },
@@ -145,7 +156,8 @@ const acoes = {
   async cofrinho() {
     const cofs = await ler('cofrinhos');
     if (!cofs.length) return;
-    await irPara(`/cofrinhos/${um(cofs).id}`, '');
+    await irPara(`/cofrinhos/${um(cofs).id}`, null);
+    passo('abrir "Registrar depósito"');
     await page.getByRole('button', { name: 'Registrar depósito' }).click();
     await page.locator('#mov-valor').fill(String(entre(10, 300)));
     await page.locator('form').getByRole('button', { name: 'Registrar depósito' }).click();
@@ -209,6 +221,7 @@ while (Date.now() < fim) {
   if (!muitos && Date.now() > fim - MINUTOS * 30_000) { muitos = true; await acoes.muitosDados(); registrar({ evento: 'muitos-dados' }); }
   const nome = sortearAcao();
   const errosAntes = erros.length;
+  detalhe = '';
   await page.evaluate(() => { window.__longas = []; }).catch(() => {});
   const t0 = Date.now();
   try {
@@ -220,10 +233,10 @@ while (Date.now() < fim) {
     registrar({ acao: nome, ms, travadaMaior: maior, lento });
     if (maior > 1500) falhas.push({ tipo: 'travou', acao: nome, ms: maior, url: page.url(), lento });
   } catch (e) {
-    const foto = join(SAIDA, `falha-${semente}-${feitas}.png`);
+    const foto = join(SAIDA, `falha-${process.argv[3] ?? 0}-${feitas}.png`);
     await page.screenshot({ path: foto, fullPage: true }).catch(() => {});
-    falhas.push({ tipo: 'erro', acao: nome, msg: String(e.message).split('\n')[0], url: page.url(), foto, lento });
-    registrar({ acao: nome, erro: String(e.message).split('\n')[0] });
+    falhas.push({ tipo: 'erro', acao: nome, passo: detalhe, msg: String(e.message).split('\n')[0], url: page.url(), foto, lento });
+    registrar({ acao: nome, passo: detalhe, url: page.url(), erro: String(e.message).split('\n')[0] });
     await ctx.setOffline(false);
     await page.goto(URL_APP).catch(() => {});
   }

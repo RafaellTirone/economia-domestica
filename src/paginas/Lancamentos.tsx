@@ -12,6 +12,9 @@ import type { Categoria, Lancamento } from '../tipos';
 import { formatarData, limitesDoMes, nomeDoDia } from '../utils/datas';
 import { formatarMoeda, formatarMoedaComSinal } from '../utils/moeda';
 
+/** Quantos lançamentos a lista desenha de cada vez. */
+const POR_VEZ = 100;
+
 // Lista de lançamentos com busca e filtros por período, tipo e categoria.
 
 export function Lancamentos() {
@@ -44,14 +47,20 @@ export function Lancamentos() {
   const porId = new Map(categorias?.map((c) => [c.id!, c]));
 
   // Agrupa por dia
+  // Muitos lançamentos no período: desenha 100 de cada vez (com "Mostrar mais") para a tela não travar
+  const [quantos, setQuantos] = useState(POR_VEZ);
+  // Trocou o período ou os filtros: volta a mostrar só os primeiros 100
+  const chaveDaLista = `${lista?.length ?? 0}|${lista?.[0]?.id ?? ''}`;
+  const [chaveAnterior, setChaveAnterior] = useState(chaveDaLista);
+  if (chaveDaLista !== chaveAnterior) { setChaveAnterior(chaveDaLista); setQuantos(POR_VEZ); }
   const dias = useMemo(() => {
     const grupos: { data: string; itens: Lancamento[] }[] = [];
-    for (const l of lista ?? []) {
+    for (const l of (lista ?? []).slice(0, quantos)) {
       const ultimo = grupos[grupos.length - 1];
       if (ultimo?.data === l.data) ultimo.itens.push(l); else grupos.push({ data: l.data, itens: [l] });
     }
     return grupos;
-  }, [lista]);
+  }, [lista, quantos]);
 
   const filtrosAtivos = tipo !== 'todos' || categoriaId !== null || busca.trim() !== '';
 
@@ -131,6 +140,12 @@ export function Lancamentos() {
               </ul>
             </section>
           ))}
+          {lista.length > quantos && (
+            <button type="button" onClick={() => setQuantos((q) => q + POR_VEZ)}
+              className="min-h-12 rounded-2xl border-2 border-primaria bg-cartao font-extrabold text-primaria-escura">
+              Mostrar mais ({Math.min(POR_VEZ, lista.length - quantos)} de {lista.length - quantos} restantes)
+            </button>
+          )}
         </div>
       )}
     </div>

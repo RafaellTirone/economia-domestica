@@ -1,4 +1,4 @@
-import { BarChart3, Ellipsis, Gauge, Heart, Landmark, PieChart, PiggyBank, Plus, Settings, ShoppingBag, X } from 'lucide-react';
+import { BarChart3, Ellipsis, Gauge, ListChecks, Heart, Landmark, PieChart, PiggyBank, Plus, Settings, ShoppingBag, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 const PRINCIPAIS = [
   { para: '/', texto: 'Visão geral', curto: 'Visão', Icone: PieChart },
   { para: '/lancamentos', texto: 'Lançamentos', curto: 'Lançamentos', Icone: ShoppingBag },
+  { para: '/contas', texto: 'Contas do mês', curto: 'Contas', Icone: ListChecks },
   { para: '/orcamento', texto: 'Orçamento', curto: 'Orçamento', Icone: Gauge },
   { para: '/dividas', texto: 'Dívidas', curto: 'Dívidas', Icone: Landmark },
   { para: '/cofrinhos', texto: 'Cofrinhos', curto: 'Cofrinhos', Icone: PiggyBank },

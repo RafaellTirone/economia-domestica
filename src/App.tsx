@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Estrutura } from './componentes/layout/Estrutura';
 import { CadastroPix } from './paginas/CadastroPix';
@@ -18,9 +19,15 @@ import { EmprestimoForm } from './paginas/EmprestimoForm';
 import { Inicio } from './paginas/Inicio';
 import { Lancamentos } from './paginas/Lancamentos';
 import { Lancar } from './paginas/Lancar';
+import { ContasDoMes } from './paginas/ContasDoMes';
+import { useMes } from './hooks/useMes';
+import { gerarContasFixas } from './servicos/recorrencias';
 
 // Rotas (telas) do app. As que ainda não existem mostram em qual etapa chegam.
 export function App() {
+  // Contas que se repetem: cria as do mês (e do próximo) ao abrir o app e na virada do dia
+  const { hoje } = useMes();
+  useEffect(() => { void gerarContasFixas(hoje); }, [hoje]);
   return (
     <Estrutura>
       <Routes>
@@ -45,6 +52,7 @@ export function App() {
         <Route path="/relatorios" element={<Relatorios />} />
         <Route path="/configuracoes" element={<Configuracoes />} />
         <Route path="/orcamento" element={<Orcamento />} />
+        <Route path="/contas" element={<ContasDoMes />} />
         <Route path="/categorias" element={<Categorias />} />
         <Route path="/categorias/nova" element={<CategoriaForm />} />
         <Route path="/categorias/:id" element={<CategoriaForm />} />

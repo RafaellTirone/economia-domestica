@@ -7,6 +7,7 @@ import { NOMES_FORMAS } from '../componentes/ui/rotulos';
 import { banco } from '../db/banco';
 import { useAvisos } from '../hooks/useAvisos';
 import { alertaOrcamento, gastoDaCategoriaNoMes } from '../servicos/orcamento';
+import { alterarDaquiPraFrente, apagarRepeticao, criarComRepeticao, excluirSoEsteMes, mesDe, passarARepetir, pararDeRepetir } from '../servicos/recorrencias';
 import { useCategorias, useLancamento, useTodosLancamentos } from '../hooks/useDados';
 import {
   atualizarLancamento, criarLancamento, descricoesFrequentes, dividirEmParcelas, excluirLancamento, LIMITES,
@@ -50,6 +51,9 @@ export function Lancar() {
   const [erros, setErros] = useState<Erros>({});
   const [sugerida, setSugerida] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  // Conta que se repete: a alteração vale só para este mês ou daqui pra frente?
+  const [escopo, setEscopo] = useState<'so-este' | 'proximos'>('so-este');
+  const [perguntaExcluir, setPerguntaExcluir] = useState(false);
   const categoriaManual = useRef(false);
   const pagoManual = useRef(false);
   const carregado = useRef(false);
@@ -86,7 +90,7 @@ export function Lancar() {
     setSubcategoriaId(undefined);
     setSugerida(false);
     categoriaManual.current = false;
-    if (t === 'receita') { setFixa(false); setParcelas(1); if (forma === 'credito') setForma('pix'); }
+    if (t === 'receita') { setParcelas(1); if (forma === 'credito') setForma('pix'); }
   }
 
   function escolherCategoria(idCat: number) {
@@ -123,7 +127,7 @@ export function Lancar() {
   function montarDados(): DadosLancamento {
     return {
       tipo, data, descricao, valor: valorCentavos ?? 0, categoriaId, subcategoriaId, forma,
-      observacao, fixa: tipo === 'despesa' && fixa, situacao: pago ? 'pago' : 'a_pagar', parcelas: podeParcelar ? parcelas : 1,
+      observacao, fixa: fixa && !(podeParcelar && parcelas > 1), situacao: pago ? 'pago' : 'a_pagar', parcelas: podeParcelar ? parcelas : 1,
     };
   }
 
@@ -144,11 +148,14 @@ export function Lancar() {
       const nome = tipo === 'despesa' ? 'Despesa' : 'Receita';
       if (editando) {
         await atualizarLancamento(id!, dados);
-        avisar('Alterações salvas.');
+        if (existente?.recorrenciaId && escopo === 'proximos') await alterarDaquiPraFrente(id!, dados);
+        else if (!existente?.recorrenciaId && dados.fixa) await passarARepetir(id!);
+        avisar(existente?.recorrenciaId && escopo === 'proximos' ? 'Alterações salvas neste e nos próximos meses.' : 'Alterações salvas.');
         voltar();
         return;
       }
-      const ids = await criarLancamento(dados);
+      const repete = dados.fixa ? await criarComRepeticao(dados) : null;
+      const ids = repete ? repete.ids : await criarLancamento(dados);
       const texto = dados.parcelas > 1
         ? `${nome} de ${formatarMoeda(dados.valor)} salva em ${dados.parcelas}x.`
         : `${nome} de ${formatarMoeda(dados.valor)} salva.`;
@@ -162,7 +169,9 @@ export function Lancar() {
         const depois = mes ? await gastoDaCategoriaNoMes(cat.id!, novos[0].data) : 0;
         alerta = alertaOrcamento(cat.nome, cat.limiteMensal, depois - desteMes, depois);
       }
-      avisar(alerta ? `${texto} ${alerta}` : texto, { rotulo: 'Desfazer', executar: () => void banco.lancamentos.bulkDelete(ids) });
+      avisar(`${texto}${repete ? ' Vai se repetir todo mês.' : ''}${alerta ? ` ${alerta}` : ''}`, {
+        rotulo: 'Desfazer', executar: () => void (repete ? apagarRepeticao(repete.recId) : banco.lancamentos.bulkDelete(ids)),
+      });
       if (lancarOutro) {
         setValorTexto(''); setDescricao(''); setObservacao(''); setCategoriaId(null); setSubcategoriaId(undefined);
         setParcelas(1); setFixa(false); setSugerida(false); setErros({});
@@ -177,8 +186,21 @@ export function Lancar() {
     }
   }
 
-  async function excluir() {
+  async function excluir(modo?: 'so-este' | 'parar') {
     if (!id) return;
+    if (existente?.recorrenciaId) {
+      if (!modo) { setPerguntaExcluir(true); return; }
+      const desfazer = modo === 'parar'
+        ? await pararDeRepetir(Number(existente.recorrenciaId), mesDe(existente.data))
+        : await excluirSoEsteMes(id);
+      // "Parar" apaga só o que está a pagar; se esta já estava paga, apaga ela também
+      if (modo === 'parar' && existente.situacao === 'pago') await banco.lancamentos.delete(id);
+      if (desfazer) avisar(modo === 'parar' ? 'Conta excluída e não vai mais se repetir.' : 'Conta deste mês excluída.', {
+        rotulo: 'Desfazer', executar: () => void (async () => { await desfazer.executar(); if (modo === 'parar') await banco.lancamentos.put(existente); })(),
+      });
+      voltar();
+      return;
+    }
     const copia = await excluirLancamento(id);
     if (copia) avisar('Lançamento excluído.', { rotulo: 'Desfazer', executar: () => void restaurarLancamento(copia) });
     voltar();
@@ -328,10 +350,19 @@ export function Lancar() {
           <span>{tipo === 'despesa' ? 'Já foi pago' : 'Já recebi'}<br /><span className="text-sm text-suave">{pago ? 'Conta como realizado.' : `Fica como "a ${tipo === 'despesa' ? 'pagar' : 'receber'}".`}</span></span>
         </label>
 
-        {tipo === 'despesa' && (
+        {existente?.recorrenciaId ? (
+          <fieldset className="m-0 rounded-2xl border border-borda bg-fundo p-3">
+            <legend className="px-1 text-sm font-bold">Esta conta se repete todo mês. Salvar a mudança:</legend>
+            {([['so-este', 'Só neste mês'], ['proximos', 'Neste e nos próximos meses']] as const).map(([v, t]) => (
+              <label key={v} className="flex min-h-11 items-center gap-3 text-[15px]">
+                <input type="radio" name="escopo" value={v} checked={escopo === v} onChange={() => setEscopo(v)} className="h-5 w-5 accent-primaria" />{t}
+              </label>
+            ))}
+          </fieldset>
+        ) : !(podeParcelar && parcelas > 1) && (
           <label className="flex min-h-11 items-center gap-3 text-[15px]">
             <input type="checkbox" checked={fixa} onChange={(e) => setFixa(e.target.checked)} className="h-6 w-6 accent-primaria" />
-            <span>Despesa fixa (aluguel, luz, internet…)<br /><span className="text-sm text-suave">A repetição automática todo mês chega na etapa 4.</span></span>
+            <span>Repete todo mês<br /><span className="text-sm text-suave">{tipo === 'despesa' ? 'Aluguel, luz, internet… Aparece sozinha em "Contas do mês".' : 'Salário, aposentadoria, pensão… Entra sozinha todo mês.'}</span></span>
           </label>
         )}
 
@@ -343,8 +374,16 @@ export function Lancar() {
         </details>
       </section>
 
-      {editando && (
-        <button type="button" onClick={excluir} className="flex min-h-12 items-center justify-center gap-2 self-start rounded-xl border border-perigo-texto bg-cartao px-4 font-bold text-perigo-texto">
+      {perguntaExcluir && (
+        <div role="group" aria-label="Excluir conta que se repete" className="flex flex-col gap-2 rounded-2xl border-2 border-perigo-texto bg-cartao p-3">
+          <p className="m-0 font-bold">Esta conta se repete todo mês. O que excluir?</p>
+          <button type="button" onClick={() => void excluir('so-este')} className="min-h-12 rounded-xl border border-perigo-texto px-3 font-bold text-perigo-texto">Só a deste mês</button>
+          <button type="button" onClick={() => void excluir('parar')} className="min-h-12 rounded-xl bg-perigo px-3 font-bold text-white">Esta e as próximas (parar de repetir)</button>
+          <button type="button" onClick={() => setPerguntaExcluir(false)} className="min-h-11 rounded-xl px-3 font-bold">Cancelar</button>
+        </div>
+      )}
+      {editando && !perguntaExcluir && (
+        <button type="button" onClick={() => void excluir()} className="flex min-h-12 items-center justify-center gap-2 self-start rounded-xl border border-perigo-texto bg-cartao px-4 font-bold text-perigo-texto">
           <Trash2 size={18} aria-hidden="true" />Excluir lançamento
         </button>
       )}

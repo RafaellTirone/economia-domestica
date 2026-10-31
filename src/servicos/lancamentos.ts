@@ -60,7 +60,7 @@ export function montarLancamentos(d: DadosLancamento, agora = new Date()): Lanca
   const descricao = d.descricao.trim();
   const base = {
     tipo: d.tipo, descricao, categoriaId: d.categoriaId!, subcategoriaId: d.subcategoriaId || undefined,
-    forma: d.forma, observacao: d.observacao?.trim() || undefined, fixa: d.tipo === 'despesa' && d.fixa, criadoEm,
+    forma: d.forma, observacao: d.observacao?.trim() || undefined, fixa: d.tipo !== 'guardado' && d.fixa && d.parcelas <= 1, criadoEm,
   };
   if (d.parcelas <= 1) return [{ ...base, data: d.data, valor: d.valor, situacao: d.situacao }];
 
@@ -89,7 +89,11 @@ export async function atualizarLancamento(id: number, d: DadosLancamento): Promi
   const atual = await banco.lancamentos.get(id);
   if (!atual) throw new Error('Lançamento não encontrado.');
   const [novo] = montarLancamentos({ ...d, parcelas: 1 });
-  await banco.lancamentos.put({ ...novo, id, parcela: atual.parcela, criadoEm: atual.criadoEm, exemplo: atual.exemplo });
+  await banco.lancamentos.put({
+    ...novo, id, parcela: atual.parcela, criadoEm: atual.criadoEm, exemplo: atual.exemplo,
+    // Conta que se repete continua ligada à repetição
+    recorrenciaId: atual.recorrenciaId, fixa: atual.recorrenciaId ? true : novo.fixa,
+  });
 }
 
 /** Exclui e devolve uma cópia, para o botão "Desfazer". */

@@ -26,7 +26,7 @@ async function lancar(page, { tipo = 'Gastei', categoria, sub, valor, descricao,
   if (valor !== undefined) await page.getByLabel('Valor', { exact: true }).fill(valor);
   if (forma) await page.getByRole('button', { name: forma, exact: true }).click();
   if (parcelas) await page.getByLabel('Parcelas no cartão').selectOption(String(parcelas));
-  if (fixa) await page.getByLabel(/Despesa fixa/).check();
+  if (fixa) await page.getByLabel(/Repete todo mês/).check();
   if (data === 'ontem') await page.getByRole('button', { name: 'Ontem', exact: true }).click();
   else if (data) await page.locator('#campo-data').fill(data);
   if (salvarComo === 'outro') await page.getByRole('button', { name: 'Salvar e lançar outro' }).click();
@@ -173,7 +173,7 @@ await page.getByTestId('lista-lancamentos').filter({ hasText: '2 lançamentos' }
   await page.locator('#filtro-inicio').fill(iso(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1)));
   await page.locator('#filtro-fim').fill(iso(new Date(hoje.getFullYear(), hoje.getMonth() + 3, 0)));
   lista = nb(await page.getByTestId('lista-lancamentos').innerText());
-  confere('Período personalizado (próximos 2 meses) mostra as parcelas 2 e 3', lista.includes('2 lançamentos') && lista.includes('parcela 3 de 3'), lista.split('\n')[0]);
+  confere('Período personalizado (próximos 2 meses) mostra as parcelas 2 e 3 e o aluguel do mês que vem (repete todo mês)', lista.includes('3 lançamentos') && lista.includes('parcela 3 de 3') && lista.includes('Aluguel'), lista.split('\n')[0]);
   confere('Datas do período aparecem em dd/mm/aaaa', /^\d{2}\/\d{2}\/\d{4}$/.test(await page.locator('#filtro-inicio').inputValue()));
   await page.getByLabel('Escolher outro período').uncheck();
 
@@ -181,7 +181,7 @@ await page.getByTestId('lista-lancamentos').filter({ hasText: '2 lançamentos' }
   await page.getByRole('link', { name: /Aluguel/ }).click();
   await page.getByRole('heading', { name: 'Editar lançamento' }).waitFor();
   confere('Edição abre com os dados salvos', (await page.getByLabel('Valor', { exact: true }).inputValue()) === '1.650,00'
-    && (await page.getByLabel(/Despesa fixa/).isChecked()));
+    && (await page.getByLabel('Só neste mês').isChecked()));
   await page.getByLabel('Valor', { exact: true }).fill('1.700,00');
   await salvar(page);
   await page.getByTestId('lista-lancamentos').waitFor();

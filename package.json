@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --port 4173 --strictPort",
     "test": "vitest run",
-    "test:e2e": "node tests/e2e.mjs && node tests/e2e-lancamentos.mjs && node tests/e2e-dividas.mjs && node tests/e2e-cofrinhos.mjs && node tests/e2e-desejos.mjs && node tests/e2e-relatorios.mjs && node tests/e2e-comprovantes.mjs && node tests/e2e-backup.mjs && node tests/e2e-pwa.mjs && node tests/e2e-orcamento.mjs",
+    "test:e2e": "node tests/e2e.mjs && node tests/e2e-lancamentos.mjs && node tests/e2e-dividas.mjs && node tests/e2e-cofrinhos.mjs && node tests/e2e-desejos.mjs && node tests/e2e-relatorios.mjs && node tests/e2e-comprovantes.mjs && node tests/e2e-backup.mjs && node tests/e2e-pwa.mjs && node tests/e2e-orcamento.mjs && node tests/e2e-contas.mjs",
     "build:previa": "tsc -b && vite build --mode previa --base ./ --outDir dist-previa && node scripts/gerar-previa.mjs"
   },
   "dependencies": {

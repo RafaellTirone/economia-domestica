@@ -50,7 +50,7 @@ export interface Lancamento {
   subcategoriaId?: string;
   forma: FormaPagamento;
   observacao?: string;
-  /** Despesa fixa (aluguel, luz…) — repete todo mês. */
+  /** Conta fixa (aluguel, luz, salário…) — repete todo mês. */
   fixa: boolean;
   situacao: 'pago' | 'a_pagar';
   /** Liga as ocorrências de uma mesma conta fixa. */
@@ -58,6 +58,27 @@ export interface Lancamento {
   /** Compra parcelada no cartão: cada parcela cai no mês dela. */
   parcela?: { numero: number; total: number; grupoId: string };
   /** Marcado nos dados de exemplo, para poder apagar só eles. */
+  exemplo?: boolean;
+  criadoEm: string;
+}
+
+/** Conta ou receita que se repete todo mês (aluguel, luz, salário…). Cada mês vira um lançamento. */
+export interface Recorrencia {
+  id?: number;
+  tipo: 'despesa' | 'receita';
+  descricao: string;
+  valor: Centavos;
+  categoriaId: number;
+  subcategoriaId?: string;
+  forma: FormaPagamento;
+  /** Dia do mês (1 a 31). Em meses mais curtos, cai no último dia. */
+  dia: number;
+  /** Primeiro mês a gerar automaticamente ('AAAA-MM'). */
+  inicio: string;
+  /** Último mês ('AAAA-MM'); null = sem fim. */
+  fim: string | null;
+  /** Meses em que a pessoa excluiu a conta "só deste mês" — não são gerados de novo. */
+  pulados: string[];
   exemplo?: boolean;
   criadoEm: string;
 }

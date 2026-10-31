@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { banco } from '../db/banco';
+import { banco, converterFixasAntigas } from '../db/banco';
 import type { ArquivoGuardado, Configuracao } from '../tipos';
 import { abrirCofre, fecharNoCofre, PinIncorreto, type Cofre } from './cofre';
 
@@ -10,7 +10,7 @@ import { abrirCofre, fecharNoCofre, PinIncorreto, type Cofre } from './cofre';
 
 export const APP = 'nosso-dinheiro';
 export const FORMATO = 1;
-const TABELAS = ['categorias', 'lancamentos', 'emprestimos', 'pagamentosParcela', 'arquivos', 'cofrinhos', 'movimentosCofrinho', 'desejos', 'configuracoes'] as const;
+const TABELAS = ['categorias', 'lancamentos', 'emprestimos', 'pagamentosParcela', 'arquivos', 'cofrinhos', 'movimentosCofrinho', 'desejos', 'recorrencias', 'configuracoes'] as const;
 type Tabela = (typeof TABELAS)[number];
 /** Configurações que viajam no backup (a chave Pix e o controle de tentativas ficam de fora). */
 const CONFIGS_PERMITIDAS = new Set(['salario', 'preferencias-graficos']);
@@ -21,7 +21,7 @@ export interface ArquivoBackupProtegido { app: typeof APP; formato: number; cria
 
 const NOMES: Record<Tabela, string> = {
   categorias: 'categorias', lancamentos: 'lançamentos', emprestimos: 'empréstimos', pagamentosParcela: 'pagamentos de parcelas',
-  arquivos: 'arquivos (contratos e comprovantes)', cofrinhos: 'cofrinhos', movimentosCofrinho: 'depósitos e saques', desejos: 'desejos', configuracoes: 'configurações',
+  arquivos: 'arquivos (contratos e comprovantes)', cofrinhos: 'cofrinhos', movimentosCofrinho: 'depósitos e saques', desejos: 'desejos', recorrencias: 'contas que se repetem', configuracoes: 'configurações',
 };
 
 // ---------- Blob <-> texto ----------
@@ -86,7 +86,7 @@ const REGRAS: Record<Tabela, (r: Record<string, unknown>) => boolean> = {
     && umDe(r.tipo, ['despesa', 'receita']) && Array.isArray(r.subcategorias) && (r.subcategorias as unknown[]).every((s) => !!s && ehTexto((s as Record<string, unknown>).id, 80) && ehTexto((s as Record<string, unknown>).nome, 80))
     && opcional(r.limiteMensal, ehInt) && ehInt(r.ordem),
   lancamentos: (r) => ehInt(r.id) && umDe(r.tipo, ['despesa', 'receita', 'guardado']) && ehISO(r.data) && ehTexto(r.descricao, 200) && ehInt(r.valor)
-    && ehInt(r.categoriaId) && umDe(r.forma, ['dinheiro', 'pix', 'debito', 'credito']) && umDe(r.situacao, ['pago', 'a_pagar']) && opcional(r.observacao, (x) => ehTexto(x, 1000)),
+    && ehInt(r.categoriaId) && umDe(r.forma, ['dinheiro', 'pix', 'debito', 'credito']) && umDe(r.situacao, ['pago', 'a_pagar']) && opcional(r.observacao, (x) => ehTexto(x, 1000)) && opcional(r.recorrenciaId, (x) => ehTexto(x, 40)),
   emprestimos: (r) => ehInt(r.id) && ehTexto(r.nome, 100) && ehInt(r.valorEmprestado) && ehInt(r.numeroParcelas) && (r.numeroParcelas as number) >= 1 && (r.numeroParcelas as number) <= 600
     && ehInt(r.valorParcela) && ehISO(r.dataPrimeiraParcela) && umDe(r.sistema, ['price', 'sac']) && typeof r.multaAtraso === 'number' && typeof r.jurosMora === 'number',
   pagamentosParcela: (r) => ehInt(r.id) && ehInt(r.emprestimoId) && ehInt(r.numeroParcela) && ehISO(r.dataPagamento) && ehInt(r.valorPago),
@@ -94,6 +94,10 @@ const REGRAS: Record<Tabela, (r: Record<string, unknown>) => boolean> = {
   cofrinhos: (r) => ehInt(r.id) && ehTexto(r.nome, 100) && ehInt(r.meta) && opcional(r.prazo, ehISO) && opcional(r.depositoMensal, ehInt),
   movimentosCofrinho: (r) => ehInt(r.id) && ehInt(r.cofrinhoId) && umDe(r.tipo, ['deposito', 'saque']) && ehInt(r.valor) && ehISO(r.data) && opcional(r.comprovantes, (x) => Array.isArray(x) && x.every(ehInt)),
   desejos: (r) => ehInt(r.id) && ehTexto(r.nome, 100) && ehInt(r.precoVista) && umDe(r.prioridade, ['alta', 'media', 'baixa']),
+  recorrencias: (r) => ehInt(r.id) && umDe(r.tipo, ['despesa', 'receita']) && ehTexto(r.descricao, 200) && ehInt(r.valor) && ehInt(r.categoriaId)
+    && umDe(r.forma, ['dinheiro', 'pix', 'debito', 'credito']) && ehInt(r.dia) && (r.dia as number) >= 1 && (r.dia as number) <= 31
+    && typeof r.inicio === 'string' && /^\d{4}-\d{2}$/.test(r.inicio) && opcional(r.fim, (x) => typeof x === 'string' && /^\d{4}-\d{2}$/.test(x))
+    && Array.isArray(r.pulados) && (r.pulados as unknown[]).every((m) => typeof m === 'string' && /^\d{4}-\d{2}$/.test(m)),
   configuracoes: (r) => typeof r.chave === 'string' && CONFIGS_PERMITIDAS.has(r.chave),
 };
 
@@ -144,6 +148,8 @@ export async function restaurarBackup(dados: DadosBackup): Promise<void> {
         : dados[t];
       await tabela.bulkPut(linhas);
     }
+    // Backup antigo (antes das contas que se repetem): as despesas "fixa" ganham repetição
+    await converterFixasAntigas(banco.lancamentos, banco.recorrencias);
     // Chave Pix e tentativas de PIN não vêm do backup: cadastra e testa de novo
     await banco.configuracoes.delete('pix-reserva');
   });

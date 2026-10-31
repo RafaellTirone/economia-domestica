@@ -58,6 +58,12 @@ async function irPara(caminho, titulo) {
   if (titulo) await page.getByRole('heading', { name: titulo, exact: titulo !== 'Envelopes do mês' }).first().waitFor({ timeout: 15000 });
 }
 
+/** Depois de salvar/excluir o app volta para a tela anterior: espera isso acontecer. */
+async function esperarSair() {
+  passo('esperar voltar para a tela anterior');
+  await page.waitForURL((u) => !u.pathname.startsWith('/lancar'), { timeout: 10000 });
+}
+
 // ---------------- Ações ----------------
 const acoes = {
   async lancarDespesa() {
@@ -84,6 +90,7 @@ const acoes = {
     passo('salvar e esperar o aviso');
     await page.locator('form button[type=submit]').click();
     await page.getByTestId('aviso').filter({ hasText: /salva/ }).first().waitFor({ timeout: 10000 });
+    await esperarSair();
   },
   async lancarReceita() {
     await irPara('/lancar', 'Novo lançamento');
@@ -96,6 +103,7 @@ const acoes = {
     passo('salvar e esperar o aviso');
     await page.locator('form button[type=submit]').click();
     await page.getByTestId('aviso').filter({ hasText: /salva/ }).first().waitFor({ timeout: 10000 });
+    await esperarSair();
   },
   async editar() {
     const lista = (await ler('lancamentos')).filter((l) => l.tipo !== 'guardado');
@@ -106,6 +114,7 @@ const acoes = {
     if (l.recorrenciaId && aleatorio() < 0.5) await page.getByLabel('Neste e nos próximos meses').check();
     await page.locator('form button[type=submit]').click();
     await page.getByTestId('aviso').filter({ hasText: /Alterações salvas/ }).first().waitFor({ timeout: 10000 });
+    await esperarSair();
   },
   async excluir() {
     const lista = (await ler('lancamentos')).filter((l) => l.tipo !== 'guardado');
@@ -116,6 +125,7 @@ const acoes = {
     if (l.recorrenciaId) await page.getByRole('button', { name: 'Só a deste mês' }).click();
     const aviso = page.getByTestId('aviso').filter({ hasText: /excluí/ }).first();
     await aviso.waitFor({ timeout: 10000 });
+    await esperarSair();
     if (aleatorio() < 0.3) await aviso.getByRole('button', { name: 'Desfazer' }).click();
   },
   async ticarConta() {
@@ -134,7 +144,7 @@ const acoes = {
   async relatorios() {
     await irPara('/relatorios', 'Relatórios');
     await page.getByRole('radio', { name: um(['Semanal', 'Mensal', 'Anual']) }).click();
-    await page.getByRole('button', { name: um(['Mês anterior', 'Próximo mês']) }).first().click().catch(() => {});
+    await page.getByRole('button', { name: um(['Período anterior', 'Próximo período']) }).click();
   },
   async calculadoraSozinha() {
     await irPara('/lancar', 'Novo lançamento');
@@ -222,6 +232,8 @@ while (Date.now() < fim) {
   const nome = sortearAcao();
   const errosAntes = erros.length;
   detalhe = '';
+  // Como uma pessoa: fecha o aviso que ficou na tela antes de seguir
+  await page.getByRole('button', { name: 'Fechar aviso' }).click({ timeout: 2000 }).catch(() => {});
   await page.evaluate(() => { window.__longas = []; }).catch(() => {});
   const t0 = Date.now();
   try {

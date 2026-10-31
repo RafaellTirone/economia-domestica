@@ -121,7 +121,19 @@ await page.getByRole('button', { name: 'Próximo mês' }).click();
 await page.getByTestId('resumo-contas').filter({ hasText: 'Nenhuma conta' }).waitFor({ timeout: 5000 }).catch(() => {});
 confere('Mês que vem fica sem a Internet', (await page.getByTestId('conta').count()) === 0);
 
-// 8. Notebook
+// 8. Visão geral: "Precisa da sua atenção", contas do mês e para onde foi o dinheiro
+await page.goto(URL_APP);
+await page.getByTestId('atencao').waitFor();
+const atencao = nb(await page.getByTestId('atencao').innerText());
+confere('Visão geral avisa a conta que vence (Internet)', atencao.includes('Internet'), atencao.replace(/\n/g, ' · '));
+confere('Visão geral lembra de fazer a cópia de segurança', atencao.includes('cópia de segurança'));
+confere('Visão geral mostra o resumo das contas do mês', nb(await page.getByTestId('resumo-contas-inicio').innerText()).includes('Pagas R$ 1.500,00'));
+const divisao = nb(await page.getByTestId('para-onde-foi').innerText());
+confere('Barra "Para onde foi o dinheiro" mostra Moradia e o que sobrou', divisao.includes('Moradia') && divisao.includes('Sobrou'), divisao.replace(/\n/g, ' · '));
+confere('Visão geral mostra o resumo do ano', await page.getByTestId('resumo-ano').isVisible());
+await verificarTela(page, 'Visão geral completa · celular');
+
+// 9. Notebook
 const ctx2 = await navegador.newContext({ viewport: { width: 1280, height: 900 }, locale: 'pt-BR' });
 const p2 = await ctx2.newPage();
 await p2.goto(`${URL_APP}/contas`);

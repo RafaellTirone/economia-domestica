@@ -6,7 +6,7 @@ import { Lancar } from './paginas/Lancar';
 import { useMes } from './hooks/useMes';
 import { gerarContasFixas } from './servicos/recorrencias';
 import { gerarDescontosConsignado } from './servicos/emprestimos';
-import { avisarAoAbrir, carregarEventos, textoDoAviso } from './servicos/lembretes';
+import { avisarAoAbrir, avisoLigado, carregarEventos, textoDoAviso } from './servicos/lembretes';
 
 // Telas carregadas só quando abertas (o app abre mais rápido); Visão geral e Lançar vêm prontas.
 const CadastroPix = lazy(() => import('./paginas/CadastroPix').then((m) => ({ default: m.CadastroPix })));
@@ -37,6 +37,7 @@ export function App() {
       await gerarContasFixas(hoje);
       await gerarDescontosConsignado(hoje);
       // Aviso do dia (se a pessoa ligou em Configurações e o navegador permite)
+      if (!(await avisoLigado())) return; // desligado: nem monta os lembretes (abre mais leve)
       const { eventos, atrasadas } = await carregarEventos(hoje);
       await avisarAoAbrir(hoje, textoDoAviso(eventos, atrasadas, hoje));
     })();

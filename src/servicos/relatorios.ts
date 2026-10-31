@@ -1,6 +1,6 @@
 import type { Categoria, Centavos, DataISO, Lancamento } from '../tipos';
 import type { ResumoEmprestimo } from './emprestimos';
-import { adicionarDias, formatarData, hojeISO, inicioDaSemana, limitesDoMes, partesDaData } from '../utils/datas';
+import { adicionarDias, formatarData, hojeISO, inicioDaSemana, limitesDoMes } from '../utils/datas';
 
 // Relatórios semanal, mensal e anual + exportação em planilha (CSV que abre no Excel).
 
@@ -97,12 +97,18 @@ export interface RelatorioAnual {
 }
 
 export function relatorioAnual(todos: Lancamento[], categorias: Categoria[], ano: number): RelatorioAnual {
-  const lista = todos.filter((l) => partesDaData(l.data).ano === ano);
-  const meses = Array.from({ length: 12 }, (_, i) => {
-    const doMes = lista.filter((l) => partesDaData(l.data).mes === i + 1);
-    const receitas = soma(doMes, 'receita'), despesas = soma(doMes, 'despesa');
-    return { mes: i + 1, receitas, despesas, saldo: receitas - despesas, guardado: soma(doMes, 'guardado'), tem: doMes.length > 0 };
-  });
+  // Uma passada só pela lista (com anos de dados, percorrer 13 vezes pesava no celular)
+  const prefixo = `${ano}-`;
+  const lista = todos.filter((l) => l.data.startsWith(prefixo));
+  const meses = Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, receitas: 0, despesas: 0, saldo: 0, guardado: 0, tem: false }));
+  for (const l of lista) {
+    const m = meses[Number(l.data.slice(5, 7)) - 1];
+    m.tem = true;
+    if (l.tipo === 'receita') m.receitas += l.valor;
+    else if (l.tipo === 'despesa') m.despesas += l.valor;
+    else m.guardado += l.valor;
+  }
+  for (const m of meses) m.saldo = m.receitas - m.despesas;
   const comDados = meses.filter((m) => m.tem);
   const despesas = soma(lista, 'despesa'), receitas = soma(lista, 'receita');
   return {

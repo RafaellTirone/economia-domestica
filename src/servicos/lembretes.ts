@@ -135,6 +135,11 @@ export function textoDoAviso(eventos: EventoAgenda[], atrasadas: number, hoje: D
 const CHAVE_ATIVO = 'notificacoes';
 const CHAVE_ULTIMA = 'ultima-notificacao';
 
+/** O aviso ao abrir está ligado (e o navegador permite)? Leitura rápida, antes de montar os lembretes. */
+export async function avisoLigado(): Promise<boolean> {
+  return typeof Notification !== 'undefined' && Notification.permission === 'granted' && (await banco.configuracoes.get(CHAVE_ATIVO))?.valor === true;
+}
+
 export function useNotificacoesAtivas() {
   return useLiveQuery(async () => (await banco.configuracoes.get(CHAVE_ATIVO))?.valor === true, []);
 }

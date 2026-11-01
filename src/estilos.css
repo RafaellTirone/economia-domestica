@@ -35,3 +35,9 @@ body { margin: 0; background: var(--color-fundo); color: var(--color-tinta); fon
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* Relatórios em PDF: imprimir só o conteúdo, com fundo branco */
+@media print {
+  body { background: #FFFFFF; }
+  main { padding: 0 !important; }
+}

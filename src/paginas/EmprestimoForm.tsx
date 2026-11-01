@@ -11,7 +11,7 @@ import { salvarRegraSalario, useRegraSalario } from '../servicos/configuracoes';
 import { atualizarEmprestimo, criarEmprestimo, gerarDescontosConsignado, estimarParcelasPagas, guardarArquivo, primeiraParcelaPelaContratacao, validarEmprestimo, type DadosEmprestimo } from '../servicos/emprestimos';
 import { converterTaxa, formatarTaxa, NOME_PERIODO, taxaImplicita } from '../servicos/juros';
 import { formatarMoeda } from '../utils/moeda';
-import { analisarTextoContrato, extrairTextoDoPdf, type TermosLidos } from '../servicos/leitorContrato';
+import { analisarTextoContrato, extrairTextoDoPdf, lerContratoPelaImagem, type TermosLidos } from '../servicos/leitorContrato';
 import type { PeriodoTaxa, TipoEmprestimo } from '../tipos';
 import { adicionarMeses, descreverRegraSalario, formatarData, formatarMesAno, hojeISO, lerData, partesDaData, type RegraSalario } from '../utils/datas';
 import { lerValor } from '../utils/moeda';
@@ -109,8 +109,9 @@ export function EmprestimoForm() {
 
   async function anexar(arquivo: File | undefined) {
     if (!arquivo) return;
-    if (!/pdf$/i.test(arquivo.type) && !/\.pdf$/i.test(arquivo.name)) {
-      setLeitura({ estado: 'erro', texto: 'Escolha um arquivo PDF.' });
+    const ehFoto = /^image\/(jpeg|png|webp)$/i.test(arquivo.type);
+    if (!ehFoto && !/pdf$/i.test(arquivo.type) && !/\.pdf$/i.test(arquivo.name)) {
+      setLeitura({ estado: 'erro', texto: 'Escolha o contrato em PDF ou uma foto (JPG ou PNG).' });
       return;
     }
     if (arquivo.size > TAMANHO_MAXIMO) {
@@ -122,19 +123,33 @@ export function EmprestimoForm() {
     conferidoManual.current = false;
     setLeitura({ estado: 'lendo', texto: 'Lendo o contrato no seu aparelho…' });
     try {
-      const { texto, paginas, temTexto } = await extrairTextoDoPdf(arquivo);
-      if (!temTexto) {
-        setLeitura({ estado: 'sem-texto', texto: 'Este PDF parece ser uma foto ou digitalização, sem texto para ler. O contrato fica guardado, mas preencha os campos olhando o documento.' });
-        return;
+      let { texto, paginas, temTexto } = ehFoto ? { texto: '', paginas: 1, temTexto: false } : await extrairTextoDoPdf(arquivo);
+      // Escaneado ou foto: lê o texto pela imagem, aqui no aparelho
+      const pelaImagem = !temTexto;
+      if (pelaImagem) {
+        try {
+          setLeitura({ estado: 'lendo', texto: 'Este contrato é uma imagem (escaneado ou foto). Lendo o texto pela imagem, aqui no aparelho… pode levar até 1 minuto.' });
+          ({ texto, paginas } = await lerContratoPelaImagem(arquivo, (pag, total, fracao) => setLeitura({
+            estado: 'lendo', texto: `Contrato escaneado: lendo ${total > 1 ? `a página ${pag} de ${total}` : 'a imagem'} (${Math.round(fracao * 100)}%)… pode levar até 1 minuto.`,
+          })));
+        } catch {
+          setLeitura({ estado: 'sem-texto', texto: navigator.onLine
+            ? 'Este contrato é uma imagem e não consegui ler o texto dela. O contrato fica guardado, mas preencha os campos olhando o documento.'
+            : 'Este contrato é uma imagem. Para lê-la, o app precisa baixar o leitor uma vez com internet (uns 5 MB). O contrato fica guardado; conecte e anexe de novo, ou preencha à mão.' });
+          return;
+        }
       }
       const r = analisarTextoContrato(texto);
       aplicarTermos(r.termos);
       setTermosLidos(r.termos);
       setTrechos(r.trechos);
       setLidos(new Set(Object.keys(r.trechos)));
+      const comoLi = pelaImagem ? `Li o contrato pela imagem (${paginas} ${paginas === 1 ? 'página' : 'páginas'})` : `Li o contrato (${paginas} ${paginas === 1 ? 'página' : 'páginas'})`;
       setLeitura(r.encontrados > 0
-        ? { estado: 'ok', texto: `Li o contrato (${paginas} ${paginas === 1 ? 'página' : 'páginas'}) e encontrei ${r.encontrados} ${r.encontrados === 1 ? 'termo' : 'termos'}. Eles já estão preenchidos abaixo, marcados com “lido do contrato”. Confira cada um com o documento.` }
-        : { estado: 'sem-texto', texto: 'Li o contrato, mas não reconheci os termos automaticamente. O contrato fica guardado; preencha os campos olhando o documento.' });
+        ? { estado: 'ok', texto: `${comoLi} e encontrei ${r.encontrados} ${r.encontrados === 1 ? 'termo' : 'termos'}. Eles já estão preenchidos abaixo, marcados com “lido do contrato”. Confira cada um com o documento${pelaImagem ? ' — leitura de imagem pode trocar algum número' : ''}.` }
+        : { estado: 'sem-texto', texto: pelaImagem
+          ? 'Li a imagem do contrato, mas não reconheci os termos (a foto pode estar escura ou torta). O contrato fica guardado; preencha os campos olhando o documento.'
+          : 'Li o contrato, mas não reconheci os termos automaticamente. O contrato fica guardado; preencha os campos olhando o documento.' });
     } catch {
       setLeitura({ estado: 'erro', texto: 'Não foi possível ler este PDF (pode estar protegido por senha ou danificado). O contrato fica guardado; preencha os campos à mão.' });
     }
@@ -283,7 +298,7 @@ export function EmprestimoForm() {
 
       {/* 1. Contrato */}
       <Secao titulo="1 · Contrato (opcional, mas recomendado)">
-        <p className="m-0 text-sm text-suave">Anexe o contrato em PDF. O app lê a taxa de juros, a multa e os juros de mora <strong className="text-tinta">aqui no seu aparelho</strong> — o arquivo não é enviado para lugar nenhum.</p>
+        <p className="m-0 text-sm text-suave">Anexe o contrato em PDF ou uma foto dele. O app lê o valor, as parcelas, a taxa de juros, a multa e os juros de mora <strong className="text-tinta">aqui no seu aparelho</strong> — o arquivo não é enviado para lugar nenhum. Contrato escaneado também é lido (pela imagem).</p>
         {temContrato ? (
           <div className="flex items-center gap-3 rounded-2xl border border-borda bg-fundo p-3">
             <FileText size={22} aria-hidden="true" className="shrink-0 text-primaria" />
@@ -292,8 +307,8 @@ export function EmprestimoForm() {
           </div>
         ) : null}
         <label htmlFor="campo-contrato" className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primaria bg-primaria-clara px-4 text-[15px] font-extrabold text-primaria-escura focus-within:outline focus-within:outline-3 focus-within:outline-primaria">
-          <Upload size={20} aria-hidden="true" />{temContrato ? 'Trocar o contrato (PDF)' : 'Anexar contrato (PDF)'}
-          <input id="campo-contrato" type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(e) => { void anexar(e.target.files?.[0]); e.target.value = ''; }} />
+          <Upload size={20} aria-hidden="true" />{temContrato ? 'Trocar o contrato (PDF ou foto)' : 'Anexar contrato (PDF ou foto)'}
+          <input id="campo-contrato" type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => { void anexar(e.target.files?.[0]); e.target.value = ''; }} />
         </label>
         {leitura && (
           <p role="status" data-testid="resultado-leitura" className={`m-0 flex items-start gap-2 rounded-2xl p-3 text-sm ${leitura.estado === 'ok' ? 'bg-[#E7F6EA] text-ok-texto' : leitura.estado === 'lendo' ? 'bg-primaria-clara text-[#2E2860]' : 'bg-alerta-fundo text-alerta-texto'}`}>

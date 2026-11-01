@@ -181,3 +181,40 @@ export async function extrairTextoDoPdf(arquivo: Blob): Promise<{ texto: string;
   await doc.destroy();
   return { texto, paginas: partes.length, temTexto: texto.replace(/\s/g, '').length > 40 };
 }
+
+/**
+ * Contrato escaneado (PDF só com imagens) ou foto do contrato: lê o texto pela IMAGEM, no aparelho.
+ * No PDF, desenha cada página (até 10) e lê uma por vez. Pode levar de alguns segundos a 1 minuto.
+ */
+export async function lerContratoPelaImagem(arquivo: Blob, aoProgredir?: (pagina: number, total: number, fracao: number) => void): Promise<{ texto: string; paginas: number }> {
+  const { lerTexto } = await import('./ocr');
+  if (arquivo.type.startsWith('image/')) {
+    const texto = await lerTexto(arquivo, (p) => aoProgredir?.(1, 1, p.etapa === 'lendo' ? p.fracao : 0), 'documento');
+    return { texto, paginas: 1 };
+  }
+  const pdfjs = await import('pdfjs-dist');
+  const { default: TrabalhadorPdf } = await import('pdfjs-dist/build/pdf.worker.min.mjs?worker&inline');
+  if (!pdfjs.GlobalWorkerOptions.workerPort) pdfjs.GlobalWorkerOptions.workerPort = new TrabalhadorPdf();
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(await arquivo.arrayBuffer()), isEvalSupported: false, disableFontFace: true, enableXfa: false }).promise;
+  const total = Math.min(doc.numPages, 10);
+  const partes: string[] = [];
+  try {
+    for (let p = 1; p <= total; p++) {
+      const pagina = await doc.getPage(p);
+      // Página desenhada com ~2000 px de largura: boa para ler letra de contrato
+      const base = pagina.getViewport({ scale: 1 });
+      const viewport = pagina.getViewport({ scale: Math.min(4, 2000 / base.width) });
+      const tela = document.createElement('canvas');
+      tela.width = Math.round(viewport.width);
+      tela.height = Math.round(viewport.height);
+      const ctx = tela.getContext('2d')!;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, tela.width, tela.height);
+      await pagina.render({ canvasContext: ctx, viewport }).promise;
+      partes.push(await lerTexto(tela, (pr) => aoProgredir?.(p, total, pr.etapa === 'lendo' ? pr.fracao : 0), 'documento'));
+    }
+  } finally {
+    await doc.destroy();
+  }
+  return { texto: partes.join('\n'), paginas: total };
+}

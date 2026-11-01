@@ -41,7 +41,7 @@ export function Dividas() {
           <h2 className="m-0 text-lg font-extrabold">Acompanhe seus empréstimos e financiamentos</h2>
           <ul className="m-0 mt-3 flex list-disc flex-col gap-1.5 pl-5 text-sm text-suave">
             <li>Cadastre cada contrato com o nome que quiser (ex.: “Consignado do carro”) e o número do contrato.</li>
-            <li><strong className="text-tinta">Anexe o contrato em PDF</strong>: o app lê a taxa de juros, a multa e os juros de mora, e você confere.</li>
+            <li><strong className="text-tinta">Anexe o contrato em PDF ou foto</strong>: o app lê a taxa de juros, a multa e os juros de mora, e você confere.</li>
             <li>Veja quanto está pagando de juros, quanto falta, e quanto custa cada dia de atraso.</li>
             <li>Registre os pagamentos: o app avisa atrasos e comemora quando você paga em dia.</li>
           </ul>

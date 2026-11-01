@@ -78,7 +78,7 @@ await verificarTela(page, 'Dívidas vazia · celular');
 // 2. Cadastro com o contrato em PDF
 await page.getByRole('link', { name: 'Cadastrar o primeiro empréstimo' }).click();
 await page.getByRole('heading', { name: 'Cadastrar empréstimo' }).waitFor();
-confere('Formulário tem o botão "Anexar contrato (PDF)"', await page.getByText('Anexar contrato (PDF)').isVisible());
+confere('Formulário tem o botão "Anexar contrato (PDF ou foto)"', await page.getByText('Anexar contrato (PDF ou foto)').isVisible());
 await page.locator('#campo-contrato').setInputFiles(CONTRATO);
 await page.getByTestId('resultado-leitura').filter({ hasText: /encontrei/ }).waitFor({ timeout: 30000 });
 const leitura = await page.getByTestId('resultado-leitura').innerText();

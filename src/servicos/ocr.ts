@@ -29,7 +29,8 @@ async function obterLeitor(): Promise<LeitorTesseract> {
       },
     });
     // Cupom é um bloco de linhas: ler linha por linha, mantendo o valor junto do rótulo ("Valor a pagar R$ 49,90")
-    await w.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK, preserve_interword_spaces: '1' });
+    // debug_file: silencia os avisos técnicos do motor (ex.: "Estimating resolution") no console
+    await w.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_BLOCK, preserve_interword_spaces: '1', debug_file: '/dev/null' });
     return w;
   })().catch((e) => { leitor = null; throw e; });
   return leitor;
@@ -80,14 +81,19 @@ export async function prepararImagem(origem: Blob | HTMLCanvasElement, maximo = 
   return tela;
 }
 
-/** Lê o texto de uma foto (ou página já desenhada). Pode demorar alguns segundos no celular. */
-export async function lerTexto(origem: Blob | HTMLCanvasElement, aoProgredir?: (p: Progresso) => void): Promise<string> {
+/**
+ * Lê o texto de uma foto (ou página já desenhada). Pode demorar alguns segundos no celular.
+ * modo 'recibo': cupom em uma coluna; 'documento': página inteira (contrato), com parágrafos.
+ */
+export async function lerTexto(origem: Blob | HTMLCanvasElement, aoProgredir?: (p: Progresso) => void, modo: 'recibo' | 'documento' = 'recibo'): Promise<string> {
   avisar = aoProgredir ?? null;
   try {
     aoProgredir?.({ etapa: 'preparando', fracao: 0 });
     const imagem = await prepararImagem(origem);
     aoProgredir?.({ etapa: 'carregando', fracao: 0 });
     const l = await obterLeitor();
+    const { PSM } = await import('tesseract.js');
+    await l.setParameters({ tessedit_pageseg_mode: modo === 'recibo' ? PSM.SINGLE_BLOCK : PSM.AUTO });
     const { data } = await l.recognize(imagem);
     return data.text;
   } finally {

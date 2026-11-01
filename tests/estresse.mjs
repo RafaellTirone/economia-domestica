@@ -221,7 +221,8 @@ const acoes = {
   async pagarParcela() {
     const emps = await ler('emprestimos');
     if (!emps.length) return;
-    await irPara(`/dividas/${um(emps).id}`, null);
+    const emp = um(emps);
+    await irPara(`/dividas/${emp.id}`, emp.nome);
     const botao = page.getByRole('button', { name: /^Registrar pagamento da parcela/ });
     if (!(await botao.count())) return;
     passo('registrar pagamento da parcela');
@@ -293,6 +294,17 @@ async function conferir() {
 await page.goto(URL_APP);
 await page.getByRole('button', { name: 'Ver com dados de exemplo' }).click();
 await page.getByTestId('resumo-ano').waitFor({ timeout: 20000 });
+// Um empréstimo com parcelas em atraso, para o robô ter o que pagar
+await page.evaluate((primeira) => new Promise((ok) => {
+  const r = indexedDB.open('economia-domestica');
+  r.onsuccess = () => {
+    const tx = r.result.transaction('emprestimos', 'readwrite');
+    tx.objectStore('emprestimos').add({ nome: 'Empréstimo do robô', instituicao: 'Banco Teste', numeroContrato: 'R-1', tipo: 'pessoal', valorEmprestado: 300000, numeroParcelas: 60,
+      valorParcela: 9000, taxaJuros: 2.5, periodoTaxa: 'mes', cetAnual: null, sistema: 'price', dataContratacao: null, dataPrimeiraParcela: primeira,
+      multaAtraso: 2, jurosMora: 1, periodoMora: 'mes', trechos: {}, termosConferidos: true, contratoArquivoId: null, criadoEm: '' });
+    tx.oncomplete = () => { r.result.close(); ok(); };
+  };
+}), iso(new Date(hoje.getFullYear(), hoje.getMonth() - 3, 10)));
 const fim = Date.now() + MINUTOS * 60_000;
 const tempos = {};
 const falhas = [];

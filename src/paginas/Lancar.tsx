@@ -1,7 +1,8 @@
-import { ArrowLeft, Calculator, Info, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calculator, Camera, Info, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Calculadora } from '../componentes/ui/Calculadora';
+import { FotoRecibo, type DadosDoRecibo } from '../componentes/ui/FotoRecibo';
 import { CampoData } from '../componentes/ui/CampoData';
 import { IconeCategoria } from '../componentes/ui/IconeCategoria';
 import { NOMES_FORMAS } from '../componentes/ui/rotulos';
@@ -56,6 +57,9 @@ export function Lancar() {
   const [escopo, setEscopo] = useState<'so-este' | 'proximos'>('so-este');
   const [perguntaExcluir, setPerguntaExcluir] = useState(false);
   const [calculadoraAberta, setCalculadoraAberta] = useState(false);
+  const [fotoAberta, setFotoAberta] = useState(false);
+  /** O valor veio da foto do recibo (mostra um lembrete para conferir). */
+  const [valorDaFoto, setValorDaFoto] = useState(false);
   const categoriaManual = useRef(false);
   const pagoManual = useRef(false);
   const carregado = useRef(false);
@@ -126,6 +130,30 @@ export function Lancar() {
     else navigate('/');
   }
 
+  /** Preenche o lançamento com o que foi lido da foto (a pessoa já confirmou o valor). */
+  function usarRecibo(d: DadosDoRecibo) {
+    setFotoAberta(false);
+    setValorTexto(paraCampo(d.valor));
+    setValorDaFoto(true);
+    setErros((x) => ({ ...x, valor: undefined }));
+    if (d.data) mudarData(d.data);
+    if (d.descricao && !descricao.trim()) setDescricao(d.descricao.slice(0, LIMITES.descricao));
+    // Categoria: se a pessoa ainda não escolheu, usa a sugerida pelo recibo (ex.: farmácia → Saúde › Farmácia)
+    if (d.sugestao && !categoriaId) {
+      const cat = categoriasDoTipo.find((c) => c.nome === d.sugestao!.categoria);
+      if (cat) {
+        setCategoriaId(cat.id!);
+        setSubcategoriaId(cat.subcategorias.find((s) => s.nome === d.sugestao!.subcategoria)?.id);
+        setSugerida(true);
+      }
+    }
+    setTimeout(() => {
+      const campo = document.getElementById('campo-valor') as HTMLInputElement | null;
+      campo?.focus();
+      if (d.corrigir) campo?.select();
+    }, 50);
+  }
+
   function montarDados(): DadosLancamento {
     return {
       tipo, data, descricao, valor: valorCentavos ?? 0, categoriaId, subcategoriaId, forma,
@@ -176,7 +204,7 @@ export function Lancar() {
       });
       if (lancarOutro) {
         setValorTexto(''); setDescricao(''); setObservacao(''); setCategoriaId(null); setSubcategoriaId(undefined);
-        setParcelas(1); setFixa(false); setSugerida(false); setErros({});
+        setParcelas(1); setFixa(false); setSugerida(false); setErros({}); setValorDaFoto(false);
         categoriaManual.current = false;
         topo.current?.focus();
         window.scrollTo({ top: 0 });
@@ -280,6 +308,8 @@ export function Lancar() {
         )}
       </fieldset>
 
+      {fotoAberta && <FotoRecibo aoFechar={() => setFotoAberta(false)} aoUsar={usarRecibo} />}
+
       {calculadoraAberta && (
         <Calculadora inicial={valorCentavos && valorCentavos > 0 ? valorCentavos : null} categoria={categoria} subcategoriaId={subcategoriaId}
           aoEscolherSub={setSubcategoriaId} aoFechar={() => setCalculadoraAberta(false)}
@@ -296,8 +326,13 @@ export function Lancar() {
       <section aria-label="Valor e detalhes" className="flex flex-col gap-4 rounded-[22px] border border-borda bg-cartao p-4 md:p-5">
         <p className="m-0 text-sm font-bold text-suave">2 · Quanto e como</p>
         <div>
-          <div className="flex items-center">
+          <div className="flex items-center gap-1">
             <label htmlFor="campo-valor" className="flex-1 text-sm font-bold">Valor</label>
+            {tipo === 'despesa' && !editando && (
+              <button type="button" onClick={() => setFotoAberta(true)} className="flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-sm font-bold text-primaria-escura hover:bg-primaria-clara">
+                <Camera size={18} aria-hidden="true" />Foto do recibo
+              </button>
+            )}
             <button type="button" onClick={() => setCalculadoraAberta(true)} className="flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-sm font-bold text-primaria-escura hover:bg-primaria-clara">
               <Calculator size={18} aria-hidden="true" />Calculadora
             </button>
@@ -305,12 +340,13 @@ export function Lancar() {
           <div className={`mt-1 flex items-center gap-2 rounded-2xl border-2 px-3 ${erros.valor ? 'border-status-perigo' : 'border-borda-forte focus-within:border-primaria'}`}>
             <span className="text-2xl font-extrabold text-suave" aria-hidden="true">R$</span>
             <input id="campo-valor" inputMode="decimal" autoComplete="off" placeholder="0,00" value={valorTexto}
-              onChange={(e) => { setValorTexto(e.target.value.replace(/[^\d.,]/g, '')); setErros((x) => ({ ...x, valor: undefined })); }}
+              onChange={(e) => { setValorTexto(e.target.value.replace(/[^\d.,]/g, '')); setErros((x) => ({ ...x, valor: undefined })); setValorDaFoto(false); }}
               onBlur={() => { if (valorCentavos !== null && valorCentavos > 0) setValorTexto(paraCampo(valorCentavos)); }}
               aria-invalid={!!erros.valor} aria-describedby={erros.valor ? 'erro-valor' : undefined}
               className="min-h-14 w-full min-w-0 border-0 bg-transparent text-3xl font-extrabold text-tinta outline-none" />
           </div>
           {erros.valor && <p id="erro-valor" role="alert" className="m-0 mt-1 text-sm font-bold text-perigo-texto">{erros.valor}</p>}
+          {valorDaFoto && <p className="m-0 mt-1 flex items-center gap-1.5 text-sm font-semibold text-primaria-escura" data-testid="aviso-valor-foto"><Camera size={16} aria-hidden="true" />Valor lido da foto do recibo. Confira antes de salvar.</p>}
         </div>
 
         <div>

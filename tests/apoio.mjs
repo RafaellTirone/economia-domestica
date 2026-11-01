@@ -21,7 +21,9 @@ const blocosCabecalhos = toml.split('[[headers]]').slice(1).map((b) => ({
   para: (b.match(/for = "([^"]+)"/) || [])[1],
   valores: Object.fromEntries([...b.matchAll(/^\s+([A-Za-z-]+) = "(.*)"$/gm)].map((m) => [m[1], m[2]])),
 }));
-const cabecalhosPara = (caminho) => Object.assign({}, ...blocosCabecalhos.filter((b) => b.para === '/*' || b.para === caminho).map((b) => b.valores));
+// "/ocr/*" vale para tudo dentro de /ocr/; o bloco mais específico sobrepõe o "/*"
+const casa = (padrao, caminho) => padrao === caminho || (padrao.endsWith('/*') && caminho.startsWith(padrao.slice(0, -1)));
+const cabecalhosPara = (caminho) => Object.assign({}, ...blocosCabecalhos.filter((b) => casa(b.para, caminho)).map((b) => b.valores));
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
 export const servidor = createServer((req, res) => {
   let arquivo = join(DIST, decodeURIComponent(req.url.split('?')[0]));

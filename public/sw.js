@@ -1,7 +1,7 @@
 // Funcionamento sem internet (service worker).
 // - Na instalação, guarda todos os arquivos do app (lista gerada no build: precache.json).
 // - Páginas: tenta a internet primeiro (para pegar atualizações) e, sem conexão, usa a cópia guardada.
-// - Arquivos com nome versionado (/assets/...): usa a cópia guardada (nunca mudam).
+// - Arquivos com nome versionado (/assets/...) e do leitor de fotos (/ocr/): usa a cópia guardada.
 // Não guarda nem envia dados do usuário: eles ficam no banco do aparelho (IndexedDB).
 const VERSAO = new URL(self.location.href).searchParams.get('v') || 'dev';
 const CACHE = `nosso-dinheiro-${VERSAO}`;
@@ -32,7 +32,9 @@ self.addEventListener('fetch', (evento) => {
     return;
   }
   evento.respondWith(caches.match(req).then((guardado) => guardado || fetch(req).then((r) => {
-    if (r.ok && new URL(req.url).pathname.startsWith('/assets/')) { const copia = r.clone(); caches.open(CACHE).then((c) => c.put(req, copia)); }
+    // Arquivos do app e do leitor de fotos (/ocr/, baixados só no primeiro uso) ficam guardados
+    const caminho = new URL(req.url).pathname;
+    if (r.ok && (caminho.startsWith('/assets/') || caminho.startsWith('/ocr/'))) { const copia = r.clone(); caches.open(CACHE).then((c) => c.put(req, copia)); }
     return r;
   })));
 });

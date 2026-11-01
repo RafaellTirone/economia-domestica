@@ -28,6 +28,9 @@ const resumo = async () => nb(await page.getByTestId('resumo-contas').innerText(
 const contas = async () => (await page.getByTestId('conta').allInnerTexts()).map(nb);
 const dia1 = iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
 const ultimoDia = iso(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
+// Internet vence daqui a 2 dias (ou no último dia, se o mês acabar antes): sempre "vence logo" e neste mês
+const daqui2 = iso(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + 2));
+const vencimentoInternet = daqui2 <= ultimoDia ? daqui2 : ultimoDia;
 
 async function lancar({ tipo = 'Gastei', categoria, valor, descricao, data, pago }) {
   await page.goto(`${URL_APP}/lancar`);
@@ -57,7 +60,7 @@ confere('Sem contas: explica como marcar "Repete todo mês"', (await resumo()).i
 // 2. Lançar contas que se repetem
 const t = await lancar({ categoria: 'Moradia', valor: '1.500,00', descricao: 'Aluguel', data: dia1, pago: false });
 confere('Aviso confirma "Vai se repetir todo mês."', t.includes('Vai se repetir todo mês.'), t);
-await lancar({ categoria: 'Contas da casa', valor: '99,90', descricao: 'Internet', data: ultimoDia, pago: false });
+await lancar({ categoria: 'Contas da casa', valor: '99,90', descricao: 'Internet', data: vencimentoInternet, pago: false });
 await lancar({ tipo: 'Recebi', categoria: 'Salário', valor: '6.500,00', descricao: 'Salário', data: dia1, pago: true });
 
 // 3. Checklist do mês

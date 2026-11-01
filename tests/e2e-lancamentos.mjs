@@ -204,7 +204,8 @@ await page.getByTestId('lista-lancamentos').filter({ hasText: '2 lançamentos' }
   await page.locator('nav.fixed').getByRole('link', { name: 'Visão' }).click();
   await page.getByRole('heading', { name: 'Envelopes do mês' }).waitFor();
   await page.getByRole('link', { name: 'Novo lançamento' }).click();
-  await lancar(page, { categoria: 'Alimentação', sub: 'Padaria', valor: '18,50', descricao: 'Padaria', forma: 'Débito', data: 'ontem' });
+  // "Ontem" no dia 1º cai no mês passado: aí usa hoje (o total conferido é o do mês atual)
+  await lancar(page, { categoria: 'Alimentação', sub: 'Padaria', valor: '18,50', descricao: 'Padaria', forma: 'Débito', data: hoje.getDate() > 1 ? 'ontem' : undefined });
   await page.getByRole('heading', { name: 'Envelopes do mês' }).waitFor();
   const antes = await renda(page);
   await aviso(page).getByRole('button', { name: 'Desfazer' }).click();

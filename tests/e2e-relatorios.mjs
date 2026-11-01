@@ -19,6 +19,12 @@ const domingo = new Date(segunda); domingo.setDate(segunda.getDate() + 6);
 const segAnterior = new Date(segunda); segAnterior.setDate(segunda.getDate() - 7);
 const ddmmaaaa = (d) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 const mesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 15);
+// Gastos "desta semana" caem HOJE (sempre nesta semana e neste mês); os da semana anterior, 7 dias antes.
+// O salário/aluguel do mês vão no dia 1º — ou, se o dia 1º estiver nesta semana, no dia seguinte ao domingo.
+const semanaAnterior = new Date(d0); semanaAnterior.setDate(d0.getDate() - 7);
+const dia1 = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+const inicioMes = dia1 >= segunda ? new Date(domingo.getFullYear(), domingo.getMonth(), domingo.getDate() + 1) : dia1;
+const anteriorNoMesPassado = semanaAnterior.getMonth() !== hoje.getMonth();
 
 await page.goto(URL_APP);
 await page.getByRole('heading', { name: 'Envelopes do mês' }).waitFor();
@@ -28,9 +34,9 @@ await page.evaluate((d) => new Promise((ok) => {
     const tx = req.result.transaction(['lancamentos', 'cofrinhos', 'movimentosCofrinho'], 'readwrite');
     const base = { forma: 'pix', fixa: false, situacao: 'pago', criadoEm: '' };
     const add = (data, tipo, valor, categoriaId, descricao) => tx.objectStore('lancamentos').add({ ...base, data, tipo, valor, categoriaId, descricao });
-    add(d.segunda, 'despesa', 7250, 2, 'Delivery');
-    add(d.segunda, 'despesa', 22000, 3, '=HYPERLINK("http://golpe")');
-    add(d.segAnterior, 'despesa', 10000, 2, 'Feira');
+    add(d.hoje, 'despesa', 7250, 2, 'Delivery');
+    add(d.hoje, 'despesa', 22000, 3, '=HYPERLINK("http://golpe")');
+    add(d.semanaAnterior, 'despesa', 10000, 2, 'Feira');
     add(d.inicioMes, 'receita', 650000, 12, 'Salário');
     add(d.inicioMes, 'despesa', 165000, 1, 'Aluguel; mês');
     add(d.mesPassado, 'receita', 650000, 12, 'Salário');
@@ -39,19 +45,20 @@ await page.evaluate((d) => new Promise((ok) => {
     tx.objectStore('movimentosCofrinho').add({ cofrinhoId: 1, tipo: 'deposito', valor: 320000, data: d.inicioMes, via: 'manual', lancamentoId: null });
     tx.oncomplete = () => { req.result.close(); ok(); };
   };
-}), { segunda: iso(segunda), segAnterior: iso(segAnterior), inicioMes: iso(new Date(hoje.getFullYear(), hoje.getMonth(), 1)), mesPassado: iso(mesPassado) });
+}), { hoje: iso(d0), semanaAnterior: iso(semanaAnterior), inicioMes: iso(inicioMes), mesPassado: iso(mesPassado) });
 
 // 1. Mensal
 await page.goto(`${URL_APP}/relatorios`);
 await page.getByTestId('numeros-relatorio').waitFor();
 confere('Relatórios: abre (antes era "Em construção")', await page.getByRole('radio', { name: 'Mensal' }).getAttribute('aria-checked') === 'true');
-const despesasMes = 165000 + 7250 + 22000 + (segAnterior.getMonth() === hoje.getMonth() ? 10000 : 0) - (segunda.getMonth() !== hoje.getMonth() ? 29250 : 0);
+const despesasMes = 165000 + 7250 + 22000 + (anteriorNoMesPassado ? 0 : 10000);
 const fmt = (c) => `R$ ${Math.floor(c / 100).toLocaleString('pt-BR')},${String(c % 100).padStart(2, '0')}`;
 const numeros = nb(await page.getByTestId('numeros-relatorio').innerText());
 confere(`Mensal: receitas R$ 6.500,00 e despesas ${fmt(despesasMes)}`, numeros.includes('R$ 6.500,00') && numeros.includes(fmt(despesasMes)), numeros.replace(/\n/g, ' · '));
 confere('Mensal: guardado em cofrinhos aparece separado (R$ 0,00 em lançamentos "Guardei")', numeros.includes('Guardado em cofrinhos'));
 const comp = nb(await page.getByTestId('comparacao-mes').innerText());
-confere('Mensal: compara com o mês anterior (despesas R$ 5.000,00 no mês passado)', comp.includes('R$ 5.000,00'));
+const despesasMesPassado = 500000 + (anteriorNoMesPassado ? 10000 : 0);
+confere(`Mensal: compara com o mês anterior (despesas ${fmt(despesasMesPassado)} no mês passado)`, comp.includes(fmt(despesasMesPassado)), comp.replace(/\n/g, ' · '));
 confere('Mensal: gastos por categoria e maiores despesas', await page.getByRole('region', { name: 'Gastos por categoria' }).isVisible() && nb(await page.getByRole('region', { name: 'Maiores despesas' }).innerText()).includes('Aluguel; mês'));
 // "Ver como": trocar o formato do gráfico de categorias
 const blocoCat = page.getByRole('region', { name: 'Gastos por categoria' });

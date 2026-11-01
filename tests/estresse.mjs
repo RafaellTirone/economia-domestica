@@ -15,7 +15,8 @@ const LOG = join(SAIDA, `rodada-${semente}.jsonl`);
 const registrar = (o) => appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), ...o }) + '\n');
 
 // Sorteio repetível (mesma semente = mesma sequência, para reproduzir um bug)
-const aleatorio = () => { semente = (semente * 1103515245 + 12345) % 2147483648; return semente / 2147483648; };
+// (mulberry32: conta em 32 bits; a versão anterior perdia precisão e começava a repetir a sequência)
+const aleatorio = () => { semente = (semente + 0x6D2B79F5) | 0; let t = Math.imul(semente ^ (semente >>> 15), 1 | semente); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const um = (lista) => lista[Math.floor(aleatorio() * lista.length)];
 const entre = (a, b) => a + Math.floor(aleatorio() * (b - a + 1));
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -203,7 +204,7 @@ const acoes = {
     }
     await irPara('/categorias/nova', 'Nova categoria');
     passo('criar categoria');
-    await page.locator('#categoria-nome').fill(`Robô ${entre(1, 99999)}`);
+    await page.locator("#categoria-nome").fill(`Robô ${Date.now().toString(36)}`); // nome sempre novo
     await page.getByRole('button', { name: /^Cor / }).nth(entre(0, 11)).click();
     await page.getByRole('button', { name: /^Ícone / }).nth(entre(0, 10)).click();
     await page.getByRole('button', { name: 'Criar categoria' }).click();
@@ -276,7 +277,7 @@ async function conferir() {
   await page.goto(URL_APP);
   await page.getByRole('heading', { name: 'Envelopes do mês' }).waitFor({ timeout: 20000 });
   const lancs = await ler('lancamentos');
-  const mes = iso(hoje).slice(0, 7);
+  const mes = iso(new Date()).slice(0, 7); // "hoje" de agora: a rodada pode virar o mês
   const despesas = lancs.filter((l) => l.tipo === 'despesa' && l.data.startsWith(mes)).reduce((s, l) => s + l.valor, 0);
   const renda = nb(await page.locator('section[aria-labelledby="titulo-renda"]').innerText());
   if (despesas > 0 && !renda.includes(reais(despesas))) problemas.push(`Despesas do mês na tela não batem: banco ${reais(despesas)} · tela "${renda.replace(/\n/g, ' ')}"`);
